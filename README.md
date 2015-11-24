@@ -6,9 +6,9 @@ Coconut Mobile provides the core features for a Coconut based project. Additiona
 What this plugin provides
 -------------------------
 
-GeoHierarchy - code for using and manipulating the geographic hierarchy of Zanzibar (Zones have districts, districts have shehias..., etc)
-FacilityHierarchy - management of the facility list
-Case - used to combine multiple results together into a single case (Notification + Facility Record + Household data = Case)
+- GeoHierarchy - code for using and manipulating the geographic hierarchy of Zanzibar (Zones have districts, districts have shehias..., etc)
+- FacilityHierarchy - management of the facility list
+- Case - used to combine multiple results together into a single case (Notification + Facility Record + Household data = Case)
 
 Coconut Mobile Plugin Architecture Described
 --------------------------------------------
