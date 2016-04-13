@@ -5,6 +5,14 @@ _(["shehias_high_risk","shehias_received_irs"]).each (docId) ->
     Coconut[docId] = result
     console.log "Loaded #{docId}"
 
+designDoc = Utils.createDesignDoc "cases", (doc) ->
+  emit(doc.MalariaCaseID, null) if doc.MalariaCaseID
+  emit(doc.caseid, null) if doc.caseid
+
+Utils.addOrUpdateDesignDoc designDoc,
+  success: -> console.log "cases/cases query in place"
+
+
 class Case
   constructor: (options) ->
     @caseID = options?.caseID
@@ -64,6 +72,9 @@ class Case
     
 
   fetch: (options) =>
+    unless @caseID
+      console.error "No caseID to fetch data for"
+      return
     Coconut.database.query "cases/cases",
       key: @caseID
       include_docs: true
@@ -456,6 +467,114 @@ class Case
       .join(",")
       result += "--EOR--" if result isnt ""
 
+  saveAndAddResultToCase: (result) =>
+    if @[result.question]?
+      console.error "#{result.question} already exists for:"
+      console.error @
+      return
+    console.debug result
+
+    Coconut.database.post result
+    .then (result) =>
+      console.log "saved"
+      console.debug result
+      @questions.push result.question
+      @[result.question] = result
+      console.debug @
+      console.debug window.malariaCase
+      Coconut.menuView.update()
+    .catch (error) ->
+      console.error error
+
+  createNextResult: =>
+    @fetch
+      error: -> console.error error
+      success: =>
+        if @["Household Members"] and @["Household Members"].length > 0
+          console.log "Household Members exists, no result created"
+          # Don't create anything
+        else if @Household?.complete
+          console.log "Creating Household members and neighbor households if necessary"
+          @createHouseholdMembers()
+          @createNeighborHouseholds()
+        else if @Facility?.complete
+          console.log "Creating Household"
+          @createHousehold()
+        else if @["Case Notification"]?.complete
+          console.log "Creating Facility"
+          @createFacility()
+        _.delay(Coconut.menuView.render, 500)
+
+  createFacility: =>
+    @saveAndAddResultToCase
+      question: "Facility"
+      MalariaCaseID: @caseID
+      FacilityName: @facility()
+      Shehia: @shehia()
+      collection: "result"
+      createdAt: moment(new Date()).format(Coconut.config.get "date_format")
+      lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
+
+  createHousehold: =>
+    @saveAndAddResultToCase
+      question: "Household"
+      Reasonforvisitinghousehold: "Index Case Household"
+      MalariaCaseID: @caseID
+      HeadofHouseholdName: @Facility.HeadofHouseholdName
+      Shehia: @shehia()
+      Village: @Facility.Village
+      ShehaMjumbe: @Facility.ShehaMjumbe
+      ContactMobilepatientrelative: @Facility.ContactMobilepatientrelative
+      collection: "result"
+      createdAt: moment(new Date()).format(Coconut.config.get "date_format")
+      lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
+
+  createHouseholdMembers: =>
+    unless _(@questions).contains 'Household Members'
+      # -1 because we don't need information for index case
+      _(@Household.TotalNumberofResidentsintheHousehold-1).times =>
+
+        result = {
+          question: "Household Members"
+          MalariaCaseID: @caseID
+          HeadofHouseholdName: @Household.HeadofHouseholdName
+          collection: "result"
+          createdAt: moment(new Date()).format(Coconut.config.get "date_format")
+          lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
+        }
+
+        Coconut.database.post result
+        .then =>
+          @questions.push result.question
+          @[result.question] = [] unless @[result.questin]
+          @[result.question].push result
+          Coconut.menuView.update()
+        .catch (error) ->
+          console.error error
+
+  createNeighborHouseholds: =>
+    # If there is more than one Household for this case, then Neighbor households must already have been created
+    unless (_(@questions).filter (question) -> question is 'Household').length is 1
+      _(@Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold).times =>
+
+        result = {
+          Reasonforvisitinghousehold: "Index Case Neighbors"
+          question: "Household"
+          MalariaCaseID: @result.get "MalariaCaseID"
+          Shehia: @result.get "Shehia"
+          Village: @result.get "Village"
+          ShehaMjumbe: @result.get "ShehaMjumbe"
+          collection: "result"
+          createdAt: moment(new Date()).format(Coconut.config.get "date_format")
+          lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
+        }
+
+        Coconut.database.post result
+        .then =>
+          Coconut.menuView.update()
+        .catch (error) ->
+          console.error error
+
 Case.loadSpreadsheetHeader = (options) ->
   if Coconut.spreadsheetHeader
     options.success()
@@ -564,3 +683,5 @@ Case.updateSpreadsheetForCases = (options) ->
               spreadsheet_row_doc[question] = malariaCase.spreadsheetRowString(question)
             docsToSave.push spreadsheet_row_doc
             finished()
+
+module.exports = Case
