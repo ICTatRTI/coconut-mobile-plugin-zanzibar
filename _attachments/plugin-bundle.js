@@ -1,5 +1,5 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.Plugin = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var Case, designDoc,
+var Case,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
 _(["shehias_high_risk", "shehias_received_irs"]).each(function(docId) {
@@ -11,20 +11,39 @@ _(["shehias_high_risk", "shehias_received_irs"]).each(function(docId) {
   });
 });
 
-designDoc = Utils.createDesignDoc("cases", function(doc) {
+Utils.addOrUpdateDesignDoc(Utils.createDesignDoc("cases", function(doc) {
   if (doc.MalariaCaseID) {
     emit(doc.MalariaCaseID, null);
   }
   if (doc.caseid) {
     return emit(doc.caseid, null);
   }
-});
+}));
 
-Utils.addOrUpdateDesignDoc(designDoc, {
-  success: function() {
-    return console.log("cases/cases query in place");
+Utils.addOrUpdateDesignDoc(Utils.createDesignDoc("casesWithSummaryData", function(doc) {
+  var date, lastTransfer, match;
+  if (doc.MalariaCaseID) {
+    date = doc.DateofPositiveResults || doc.lastModifiedAt;
+    match = date.match(/^(\d\d).(\d\d).(2\d\d\d)/);
+    if (match != null) {
+      date = match[3] + "-" + match[2] + "-" + match[1];
+    }
+    if (doc.transferred != null) {
+      lastTransfer = doc.transferred[doc.transferred.length - 1];
+    }
+    if (date.match(/^2\d\d\d\-\d\d-\d\d/)) {
+      emit(date, [doc.MalariaCaseID, doc.question, doc.complete, lastTransfer]);
+    }
   }
-});
+  if (doc.caseid) {
+    if (document.transferred != null) {
+      lastTransfer = doc.transferred[doc.transferred.length - 1];
+    }
+    if (doc.date.match(/^2\d\d\d\-\d\d-\d\d/)) {
+      return emit(doc.date, [doc.caseid, "Facility Notification", null, lastTransfer]);
+    }
+  }
+}));
 
 Case = (function() {
   function Case(options) {
@@ -1485,7 +1504,7 @@ GeoHierarchy = (function() {
 module.exports = GeoHierarchy;
 
 
-},{"underscore":6}],4:[function(require,module,exports){
+},{"underscore":7}],4:[function(require,module,exports){
 var HouseholdLocationSelectorView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1572,13 +1591,84 @@ global.Case = require('./Case');
 
 global.HouseholdLocationSelectorView = require('./HouseholdLocationSelectorView');
 
-_.delay(function() {
+global.SummaryView = require('./SummaryView');
 
-  /*
-  Coconut.router.route ":database/find/case", ->
-    Coconut.findCaseView = new FindCaseView() unless Coconut.findCaseView
-    Coconut.findCaseView.render()
-   */
+_.delay(function() {
+  Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials());
+  Coconut.router.route(":database/summary", function() {
+    if (Coconut.summaryView == null) {
+      Coconut.summaryView = new SummaryView();
+    }
+    return Coconut.database.query("casesWithSummaryData", {
+      descending: true,
+      include_docs: false,
+      limit: 100
+    }, (function(_this) {
+      return function(error, result) {
+        if (error) {
+          return console.error(JSON.stringify(error));
+        } else {
+          return Coconut.summaryView.render(result);
+        }
+      };
+    })(this));
+  });
+  Coconut.router.route(":database/transfer/:caseID", function(caseID) {
+    var caseResults;
+    if (Coconut.currentUser) {
+      $("#content").html("<h2> Select a user to transfer " + caseID + " to: </h2> <select id='users'> <option></option> </select> <br/> <button onClick='window.history.back()'>Cancel</button> <h3>Case Results to be transferred</h3> <div id='caseinfo'></div>");
+      caseResults = [];
+      Coconut.database.query("cases", {
+        key: caseID,
+        include_docs: true
+      }, (function(_this) {
+        return function(error, result) {
+          if (error) {
+            console.error(error);
+          }
+          caseResults = _.pluck(result.rows, "doc");
+          Coconut.database.query("usersByDistrict", {}, function(error, result) {
+            return $("#content select").append(_(result.rows).map(function(user) {
+              if (user.key == null) {
+                return "";
+              }
+              return "<option id='" + user.id + "'>" + user.key + "   " + (user.value.join("   ")) + "</option>";
+            }).join(""));
+          });
+          return $("#caseinfo").html(_(caseResults).map(function(caseResult) {
+            return "<pre> " + (JSON.stringify(caseResult, null, 2)) + " </pre>";
+          }).join("<br/>"));
+        };
+      })(this));
+      return $("select").change(function() {
+        var user;
+        user = $('select').find(":selected").text();
+        if (confirm("Are you sure you want to transfer Case:" + caseID + " to " + user + "?")) {
+          _(caseResults).each(function(caseResult) {
+            Coconut.debug("Marking " + caseResult._id + " as transferred");
+            if (caseResult.transferred == null) {
+              caseResult.transferred = [];
+            }
+            return caseResult.transferred.push({
+              from: Coconut.currentUser.get("_id"),
+              to: $('select').find(":selected").attr("id"),
+              time: moment().format("YYYY-MM-DD HH:mm"),
+              notifiedViaSms: [],
+              received: false
+            });
+          });
+          return Coconut.cloudDatabase.bulkDocs({
+            docs: caseResults
+          })["catch"](function(error) {
+            console.error("Could not save " + (JSON.stringify(caseResults)) + ":");
+            return console.error(error);
+          }).then(function() {
+            return Coconut.router.navigate("", true);
+          });
+        }
+      });
+    }
+  });
   Coconut.menuView.renderHeader = function() {
     var followup_url, incompleteResults, new_case_url, update_case_url;
     new_case_url = "#zanzibar/show/results/Case Notification";
@@ -1589,7 +1679,7 @@ _.delay(function() {
       questionId = question.get("_id");
       url = "#zanzibar/show/results/" + questionId;
       return "<a style='padding-right:20px' class='drawer_question_set_link' href='" + url + "'>" + questionId + " <span id='incomplete_" + (question.safeLabel()) + "'></span></a> <!-- <a class='drawer_question_set_link' href='" + url + "'><i class='mdl-color-text--accent material-icons'>add</i></a> -->";
-    }).join("")) + " <a style='position:absolute; top:0px; right:0px;' class='mdl-navigation__link' href='#" + Coconut.databaseName + "/sync'><i class='mdl-color-text--accent material-icons'>sync</i>Sync</a>");
+    }).join("")) + " <a style='padding-right:20px' class='drawer_question_set_link' href='#zanzibar/summary'>Summary</a> <a style='position:absolute; top:0px; right:0px;' class='mdl-navigation__link' href='#" + Coconut.databaseName + "/sync'><i class='mdl-color-text--accent material-icons'>sync</i>Sync</a>");
     incompleteResults = {};
     Coconut.questions.each(function(question) {
       return incompleteResults[question.get("_id")] = 0;
@@ -1616,7 +1706,41 @@ module.exports = Plugin;
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Case":1,"./FacilityHierarchy":2,"./GeoHierarchy":3,"./HouseholdLocationSelectorView":4}],6:[function(require,module,exports){
+},{"./Case":1,"./FacilityHierarchy":2,"./GeoHierarchy":3,"./HouseholdLocationSelectorView":4,"./SummaryView":6}],6:[function(require,module,exports){
+var SummaryView,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+SummaryView = (function(superClass) {
+  extend(SummaryView, superClass);
+
+  function SummaryView() {
+    this.render = bind(this.render, this);
+    return SummaryView.__super__.constructor.apply(this, arguments);
+  }
+
+  SummaryView.prototype.el = '#content';
+
+  SummaryView.prototype.render = function(result) {
+    this.$el.html("<style> table#summary td{ border: solid black 1px; } table#summary tr.even{ background-color: #CFC; } table#summary tr.odd{ background-color: #FFFFB2; } table.results th.header, table.results td{ font-size:150%; } .dataTables_wrapper .dataTables_length{ display: none; } .dataTables_filter input{ display:inline; width:300px; } a[role=button]{ background-color: white; margin-right:5px; -moz-border-radius: 1em; -webkit-border-radius: 1em; border: solid gray 1px; font-family: Helvetica,Arial,sans-serif; font-weight: bold; color: #222; text-shadow: 0 1px 0 #fff; -webkit-background-clip: padding-box; -moz-background-clip: padding; background-clip: padding-box; padding: .6em 20px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; position: relative; zoom: 1; } a[role=button].paginate_disabled_previous, a[role=button].paginate_disabled_next{ color:gray; } a.ui-btn{ display: inline-block; width: 300px; } .dataTables_info{ float:right; } .dataTables_paginate{ margin-bottom:20px; } </style> Cases on this tablet: <table id='summary'> <thead> <td>Date</td> <td>ID</td> <td>Type</td> <td>Complete</td> <td>Transfer</td> <td>Options</td> </thead> <tbody> " + (_.map(result.rows, function(row) {
+      console.log(row);
+      return result = "<tr> <td>" + row.key + "</td> <td><a class='button' href='#edit/result/" + row.id + "'>" + row.value[0] + "</a></td> <td>" + row.value[1] + "</td> <td>" + (row.value[2] || "false") + "</td> <td><small> <pre> " + (row.value[3] != null ? JSON.stringify(row.value[3], null, 2).replace(/({\n|\n}|\")/g, "") : "") + " </pre></small></td> <td> <a class='button' style='text-decoration:none' href='#zanzibar/transfer/" + row.value[0] + "'>Transfer</a></td> </tr>";
+    }).join("")) + " </tbody>");
+    return $("table").dataTable({
+      aaSorting: [[0, "desc"]],
+      iDisplayLength: 25
+    });
+  };
+
+  return SummaryView;
+
+})(Backbone.View);
+
+module.exports = SummaryView;
+
+
+},{}],7:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors

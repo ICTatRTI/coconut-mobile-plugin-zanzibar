@@ -5,13 +5,31 @@ _(["shehias_high_risk","shehias_received_irs"]).each (docId) ->
     Coconut[docId] = result
     console.log "Loaded #{docId}"
 
-designDoc = Utils.createDesignDoc "cases", (doc) ->
+
+Utils.addOrUpdateDesignDoc(Utils.createDesignDoc "cases", (doc) ->
   emit(doc.MalariaCaseID, null) if doc.MalariaCaseID
   emit(doc.caseid, null) if doc.caseid
+)
 
-Utils.addOrUpdateDesignDoc designDoc,
-  success: -> console.log "cases/cases query in place"
+Utils.addOrUpdateDesignDoc(Utils.createDesignDoc "casesWithSummaryData", (doc) ->
+  if doc.MalariaCaseID
+    date = doc.DateofPositiveResults or doc.lastModifiedAt
+    match = date.match(/^(\d\d).(\d\d).(2\d\d\d)/)
+    if match?
+      date = "#{match[3]}-#{match[2]}-#{match[1]}"
 
+    if doc.transferred?
+      lastTransfer = doc.transferred[doc.transferred.length-1]
+
+    if date.match(/^2\d\d\d\-\d\d-\d\d/)
+      emit date, [doc.MalariaCaseID,doc.question,doc.complete,lastTransfer]
+
+  if doc.caseid
+    if document.transferred?
+      lastTransfer = doc.transferred[doc.transferred.length-1]
+    if doc.date.match(/^2\d\d\d\-\d\d-\d\d/)
+      emit doc.date, [doc.caseid, "Facility Notification", null, lastTransfer]
+)
 
 class Case
   constructor: (options) ->
