@@ -1519,7 +1519,7 @@ HouseholdLocationSelectorView = (function(superClass) {
     this.addLocation = bind(this.addLocation, this);
     this.remove = bind(this.remove, this);
     this.prefix = Math.floor(Math.random() * 1000);
-    this.setElement($("<div style='padding-left:40px' class='travelLocations'> <button class='addLocation' type='button'>Add location</button> </div>"));
+    this.setElement($("<div style='padding-left:40px' class='travelLocations'> " + (this.addLocationButton()) + " </div>"));
     this.targetLocationField.after(this.el);
     _(this.targetLocationField.val().split(/,/)).each((function(_this) {
       return function(location) {
@@ -1542,25 +1542,28 @@ HouseholdLocationSelectorView = (function(superClass) {
     "click button.removeLocation": "remove"
   };
 
+  HouseholdLocationSelectorView.prototype.addLocationButton = function() {
+    return "<button type='button' class='addLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'> Add location </button>";
+  };
+
   HouseholdLocationSelectorView.prototype.remove = function(event) {
     $(event.target).parent().parent().remove();
     console.debug(this.$('.addLocation').length);
     if (this.$('.addLocation').length === 0) {
-      this.$el.append("<button class='addLocation' type='button'>Add location</button>");
+      this.$el.append(this.addLocationButton());
     }
     return this.updateTargetLocationField();
   };
 
   HouseholdLocationSelectorView.prototype.addLocation = function() {
     var travelLocationSelector, travelLocations;
-    this.$('.addLocation').parent().remove();
     this.prefix += 1;
     travelLocations = this.targetLocationField.siblings(".travelLocations");
-    travelLocationSelector = $("<div class='travelLocation' id='" + this.prefix + "'> <label type='text' for='travelLocationName'>Location Name</label> <input name='travelLocationName' type='text'/> <label type='text' for='entry'>Entry Point</label> " + (_(["Ferry", "Informal Ferry", "Airport"]).map((function(_this) {
+    travelLocationSelector = $("<div class='travelLocation' id='" + this.prefix + "'> <label class='mdl-textfield__label' type='text' for='travelLocationName'>Location Name</label> <input class='mdl-textfield__input' name='travelLocationName' type='text'/> <label class='mdl-textfield__label' type='text' for='entry'>Entry Point</label> " + (_(["Ferry", "Informal Ferry", "Airport"]).map((function(_this) {
       return function(entryMethod, index) {
-        return "<input class='radio entrymethod' type='radio' name='" + _this.prefix + "-entry' id='" + _this.prefix + "-" + index + "' value='" + entryMethod + "'/> <label class='radio' for='" + _this.prefix + "-" + index + "'>" + entryMethod + "</label>";
+        return "<input class='radio entrymethod' type='radio' name='" + _this.prefix + "-entry' id='" + _this.prefix + "-" + index + "' value='" + entryMethod + "'/> <label class='mdl-nontextfield__label radio radio-option' for='" + _this.prefix + "-" + index + "'>" + entryMethod + "</label>";
       };
-    })(this)).join("")) + " <button type='button' class='removeLocation'>Remove location</button> <button class='addLocation' type='button'>Add location</button> </div>");
+    })(this)).join("")) + " <button type='button' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button> " + (this.addLocationButton()) + " </div>");
     travelLocations.append(travelLocationSelector);
     return travelLocationSelector;
   };
@@ -1700,7 +1703,7 @@ _.delay(function() {
     });
   };
   return Coconut.menuView.renderHeader();
-}, 1000);
+}, 2000);
 
 module.exports = Plugin;
 

@@ -4,6 +4,7 @@
   "description": "Plugins added to Coconut Mobile for project specific features",
   "main": "plugin-bundle.js",
   "dependencies": {
+    "browserify": "^13.0.1",
     "coffeeify": "^2.0.1",
     "underscore": "^1.8.3"
   },

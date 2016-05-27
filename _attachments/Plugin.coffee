@@ -119,7 +119,7 @@ _.delay ->
       console.error error
 
   Coconut.menuView.renderHeader()
-, 1000
+, 2000
 
 
 module.exports = Plugin
