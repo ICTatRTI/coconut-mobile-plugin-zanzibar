@@ -3,16 +3,16 @@ class HouseholdLocationSelectorView extends Backbone.View
     @prefix = Math.floor(Math.random()*1000)
     @setElement $("
       <div style='padding-left:40px' class='travelLocations'>
-        #{@addLocationButton()}
       </div>
     ")
     @targetLocationField.after @el
     _(@targetLocationField.val().split(/,/)).each (location) =>
-      return if location is ""
+      return if location.replace(/ *:* */,"") is ""
       [locationName, entryPoint] = location.split(/: /)
       locationSelector = @addLocation()
       locationSelector.find("[name=travelLocationName]").val locationName
-      locationSelector.find("[value=#{entryPoint}]").prop('checked',true)
+      locationSelector.find("[value='#{entryPoint}']").prop('checked',true)
+    @$el.append @addLocationButton() if @$('.addLocation').length is 0
 
   events:
     "change input[name=travelLocationName]": "updateTargetLocationField"
@@ -21,20 +21,23 @@ class HouseholdLocationSelectorView extends Backbone.View
     "click button.removeLocation": "remove"
  
   addLocationButton: -> "
-    <button type='button' class='addLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>
+    <button type='button' style='position:static' class='addLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>
       Add location
     </button>
   "
 
+  removeLocationButton: -> "
+    <button type='button' style='position:static' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button>
+  "
+
   remove: (event) =>
-    $(event.target).parent().parent().remove()
-    console.debug @$('.addLocation').length
+    $(event.target).closest(".travelLocation").remove()
     if @$('.addLocation').length is 0
-      @$el.append @addLocationButton()
+      @$el.append @addLocationButton() if @$('.addLocation').length is 0
     @updateTargetLocationField()
 
-  addLocation: () =>
-    #@$('.addLocation').parent().remove()
+  addLocation: (event) =>
+    $(event.target).closest("button.addLocation").remove() if event # Remove the addLocation button that was clicked
     @prefix+=1
     
     travelLocations = @targetLocationField.siblings(".travelLocations")
@@ -53,8 +56,7 @@ class HouseholdLocationSelectorView extends Backbone.View
               "
             .join("")
           }
-        <button type='button' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button>
-        #{@addLocationButton()}
+        #{@removeLocationButton()}
       </div>
     ")
     travelLocations.append travelLocationSelector
@@ -62,13 +64,18 @@ class HouseholdLocationSelectorView extends Backbone.View
     return travelLocationSelector
 
   updateTargetLocationField: =>
-    
-    @targetLocationField.val(_.map @$el.find(".travelLocation"), (location) ->
-      locationName = $(location).find("input[name='travelLocationName']").val()
-      entryMethod = $(location).find("input.entrymethod:checked").val() or ""
-      
-      "#{locationName}: #{entryMethod}"
-    .join(", ")
+    @targetLocationField.val(
+      val = _.chain(@$el.find(".travelLocation")).map (location) =>
+        locationName = $(location).find("input[name='travelLocationName']").val()
+        entryMethod = $(location).find("input.entrymethod:checked").val() or ""
+        if locationName
+          if @$el.find("button.addLocation").length is 0
+            @$el.append @addLocationButton()
+          "#{locationName}: #{entryMethod}"
+        else
+          null
+      .compact().join(", ").value()
     ).change() # Needed to trigger change event
+    @targetLocationField.closest("div.mdl-textfield").addClass "is-dirty"
 
 module.exports = HouseholdLocationSelectorView
