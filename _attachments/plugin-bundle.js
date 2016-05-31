@@ -1550,7 +1550,7 @@ HouseholdLocationSelectorView = (function(superClass) {
   };
 
   HouseholdLocationSelectorView.prototype.removeLocationButton = function() {
-    return "<button type='button' style='position:static' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button>";
+    return "<button type='button' style='display:block;position:static' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button>";
   };
 
   HouseholdLocationSelectorView.prototype.remove = function(event) {
