@@ -27,7 +27,7 @@ class HouseholdLocationSelectorView extends Backbone.View
   "
 
   removeLocationButton: -> "
-    <button type='button' style='display:block;position:static' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button>
+    <button type='button' style='margin-top:10px;margin-bottom:10px;display:block;position:static' class='removeLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>Remove location</button>
   "
 
   remove: (event) =>
