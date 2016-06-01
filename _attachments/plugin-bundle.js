@@ -1608,6 +1608,8 @@ module.exports = HouseholdLocationSelectorView;
 
 },{}],5:[function(require,module,exports){
 (function (global){
+var onStartup;
+
 global.GeoHierarchy = new (require('./GeoHierarchy'))();
 
 global.FacilityHierarchy = new (require('./FacilityHierarchy'))();
@@ -1618,7 +1620,7 @@ global.HouseholdLocationSelectorView = require('./HouseholdLocationSelectorView'
 
 global.SummaryView = require('./SummaryView');
 
-_.delay(function() {
+onStartup = function() {
   Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials());
   Coconut.router.route(":database/summary", function() {
     if (Coconut.summaryView == null) {
@@ -1725,7 +1727,13 @@ _.delay(function() {
     });
   };
   return Coconut.menuView.renderHeader();
-}, 2000);
+};
+
+if (typeof StartPlugins === "undefined" || StartPlugins === null) {
+  global.StartPlugins = [];
+}
+
+StartPlugins.push(onStartup);
 
 module.exports = Plugin;
 
