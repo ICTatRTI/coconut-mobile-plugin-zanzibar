@@ -1504,7 +1504,7 @@ GeoHierarchy = (function() {
 module.exports = GeoHierarchy;
 
 
-},{"underscore":7}],4:[function(require,module,exports){
+},{"underscore":8}],4:[function(require,module,exports){
 var HouseholdLocationSelectorView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1608,7 +1608,7 @@ module.exports = HouseholdLocationSelectorView;
 
 },{}],5:[function(require,module,exports){
 (function (global){
-var onStartup;
+var Sync, onStartup;
 
 global.GeoHierarchy = new (require('./GeoHierarchy'))();
 
@@ -1620,7 +1620,11 @@ global.HouseholdLocationSelectorView = require('./HouseholdLocationSelectorView'
 
 global.SummaryView = require('./SummaryView');
 
+Sync = require('./Sync');
+
 onStartup = function() {
+  var originalResultsViewRender;
+  Coconut.syncView.sync = new Sync();
   Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials());
   Coconut.router.route(":database/summary", function() {
     if (Coconut.summaryView == null) {
@@ -1726,7 +1730,14 @@ onStartup = function() {
       return console.error(error);
     });
   };
-  return Coconut.menuView.renderHeader();
+  Coconut.menuView.renderHeader();
+  originalResultsViewRender = ResultsView.prototype.render;
+  return ResultsView.prototype.render = function() {
+    originalResultsViewRender.apply(this, arguments);
+    return _.delay(function() {
+      return $("[href=#not-complete-panel]")[0].click();
+    }, 500);
+  };
 };
 
 if (typeof StartPlugins === "undefined" || StartPlugins === null) {
@@ -1739,7 +1750,7 @@ module.exports = Plugin;
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Case":1,"./FacilityHierarchy":2,"./GeoHierarchy":3,"./HouseholdLocationSelectorView":4,"./SummaryView":6}],6:[function(require,module,exports){
+},{"./Case":1,"./FacilityHierarchy":2,"./GeoHierarchy":3,"./HouseholdLocationSelectorView":4,"./SummaryView":6,"./Sync":7}],6:[function(require,module,exports){
 var SummaryView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1774,6 +1785,500 @@ module.exports = SummaryView;
 
 
 },{}],7:[function(require,module,exports){
+var Sync,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+Sync = (function(superClass) {
+  extend(Sync, superClass);
+
+  function Sync() {
+    this.transferCasesIn = bind(this.transferCasesIn, this);
+    this.convertNotificationToCaseNotification = bind(this.convertNotificationToCaseNotification, this);
+    this.replicateApplicationDocs = bind(this.replicateApplicationDocs, this);
+    this.getFromCloud = bind(this.getFromCloud, this);
+    this.log = bind(this.log, this);
+    this.sendToCloud = bind(this.sendToCloud, this);
+    this.checkForInternet = bind(this.checkForInternet, this);
+    this.backgroundSync = bind(this.backgroundSync, this);
+    this.last_get_time = bind(this.last_get_time, this);
+    this.was_last_get_successful = bind(this.was_last_get_successful, this);
+    this.last_send_time = bind(this.last_send_time, this);
+    this.was_last_send_successful = bind(this.was_last_send_successful, this);
+    this.last_send = bind(this.last_send, this);
+    return Sync.__super__.constructor.apply(this, arguments);
+  }
+
+  Sync.prototype.initialize = function() {
+    return this.set({
+      _id: "SyncLog"
+    });
+  };
+
+  Sync.prototype.target = function() {
+    return Coconut.config.cloud_url();
+  };
+
+  Sync.prototype.last_send = function() {
+    return this.get("last_send_result");
+  };
+
+  Sync.prototype.was_last_send_successful = function() {
+    return !this.get("last_send_error") || false;
+  };
+
+  Sync.prototype.last_send_time = function() {
+    var result;
+    result = this.get("last_send_time");
+    if (result) {
+      return moment(this.get("last_send_time")).fromNow();
+    } else {
+      return "never";
+    }
+  };
+
+  Sync.prototype.was_last_get_successful = function() {
+    return this.get("last_get_success");
+  };
+
+  Sync.prototype.last_get_time = function() {
+    var result;
+    result = this.get("last_get_time");
+    if (result) {
+      return moment(this.get("last_get_time")).fromNow();
+    } else {
+      return "never";
+    }
+  };
+
+  Sync.prototype.backgroundSync = function() {
+    var minimumMinutesBetweenSync;
+    if (this.lastSuccessfulSync == null) {
+      this.lastSuccessfulSync = moment("2000-01-01");
+    }
+    console.log("backgroundSync called at " + (moment().toString()) + " lastSuccessfulSync was " + (this.lastSuccessfulSync.toString()) + "}");
+    minimumMinutesBetweenSync = 15;
+    _.delay(this.backgroundSync, minimumMinutesBetweenSync * 60 * 1000);
+    return Coconut.questions.each((function(_this) {
+      return function(question) {
+        return Coconut.database.query("results", {
+          startkey: [question.id, true, _this.lastSuccessfulSync.format(Coconut.config.get("date_format"))],
+          endkey: [question.id, true, {}]
+        }).then(function(result) {
+          if (result.rows.length > 0 && moment().diff(_this.lastSuccessfulSync, 'minutes') > minimumMinutesBetweenSync) {
+            console.log("Initiating background sync");
+            $("div#log").hide();
+            return _this.sendToCloud({
+              completeResultsOnly: true,
+              error: function(error) {
+                console.log("Error: " + (JSON.stringify(error)));
+                $("div#log").html("");
+                return $("div#log").show();
+              },
+              success: function() {
+                _this.lastSuccessfulSync = moment();
+                $("div#log").html("");
+                return $("div#log").show();
+              }
+            });
+          } else {
+            return console.log("No new results for " + question.id + " so not syncing");
+          }
+        });
+      };
+    })(this));
+  };
+
+  Sync.prototype.checkForInternet = function(options) {
+    this.log("Checking for internet. (Is " + (Coconut.config.cloud_url()) + " is reachable?) Please wait.");
+    return Coconut.cloudDatabase.info()["catch"]((function(_this) {
+      return function(error) {
+        _this.log("ERROR! " + (Coconut.config.cloud_url()) + " is not reachable. Do you have enough airtime? Are you on WIFI?  Either the internet is not working or the site is down: " + (JSON.stringify(error)));
+        options.error();
+        return _this.save({
+          last_send_error: true
+        });
+      };
+    })(this)).then((function(_this) {
+      return function(result) {
+        _this.log((Coconut.config.cloud_url()) + " is reachable, so internet is available.");
+        return options.success();
+      };
+    })(this));
+  };
+
+  Sync.prototype.sendToCloud = function(options) {
+    $("#status").html("Sending data...");
+    return this.fetch({
+      error: (function(_this) {
+        return function(error) {
+          return _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+        };
+      })(this),
+      success: (function(_this) {
+        return function() {
+          return _this.checkForInternet({
+            error: function(error) {
+              console.error("No internet");
+              return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
+            },
+            success: function() {
+              _this.log("Creating list of all results on the tablet. Please wait.");
+              return Coconut.database.query("results")["catch"](function(error) {
+                console.error(error);
+                _this.log("Could not retrieve list of results: " + (JSON.stringify(error)));
+                options.error();
+                return _this.save({
+                  last_send_error: true
+                });
+              }).then(function(result) {
+                var resultIDs;
+                resultIDs = (options.completeResultsOnly != null) && options.completeResultsOnly === true ? _.chain(result.rows).filter(function(row) {
+                  return row.key[1] === true;
+                }).pluck("id").value() : _.pluck(result.rows, "id");
+                _this.log("Synchronizing " + resultIDs.length + " results. Please wait.");
+                return Coconut.database.replicate.to(Coconut.config.cloud_url_with_credentials(), {
+                  doc_ids: resultIDs
+                }).on('complete', function(info) {
+                  _this.log("Success! Send data finished: created, updated or deleted " + info.docs_written + " results on the server.");
+                  _this.save({
+                    last_send_result: result,
+                    last_send_error: false,
+                    last_send_time: new Date().getTime()
+                  });
+                  return options.success();
+                }).on('error', function(error) {
+                  console.error(error);
+                  return options.error(error);
+                });
+              });
+            }
+          });
+        };
+      })(this)
+    });
+  };
+
+  Sync.prototype.log = function(message) {
+    return console.log(message);
+  };
+
+  Sync.prototype.getFromCloud = function(options) {
+    console.debug(options);
+    $("#status").html("Getting data...");
+    return this.fetch({
+      error: (function(_this) {
+        return function(error) {
+          return _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+        };
+      })(this),
+      success: (function(_this) {
+        return function() {
+          return _this.checkForInternet({
+            error: function() {
+              return typeof options.error === "function" ? options.error(error) : void 0;
+            },
+            success: function() {
+              return _this.fetch({
+                success: function() {
+                  return _this.getNewNotifications({
+                    success: function() {
+                      _this.log("Updating users and forms. Please wait.");
+                      return _this.replicateApplicationDocs({
+                        error: function(error) {
+                          $.couch.logout();
+                          _this.log("ERROR updating application: " + (JSON.stringify(error)));
+                          _this.save({
+                            last_get_success: false
+                          });
+                          return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
+                        },
+                        success: function() {
+                          return _this.transferCasesIn({
+                            success: function() {
+                              return _this.fetch({
+                                error: function(error) {
+                                  return _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+                                },
+                                success: function() {
+                                  _this.save({
+                                    last_get_success: true,
+                                    last_get_time: new Date().getTime()
+                                  });
+                                  console.debug(options);
+                                  if (options != null) {
+                                    if (typeof options.success === "function") {
+                                      options.success();
+                                    }
+                                  }
+                                  return _.delay(function() {
+                                    return document.location.reload();
+                                  }, 5000);
+                                }
+                              });
+                            }
+                          });
+                        }
+                      });
+                    }
+                  });
+                }
+              });
+            }
+          });
+        };
+      })(this)
+    });
+  };
+
+  Sync.prototype.replicateApplicationDocs = function(options) {
+    return this.checkForInternet({
+      error: function(error) {
+        return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
+      },
+      success: (function(_this) {
+        return function() {
+          _this.log("Getting list of application documents to replicate");
+          return Coconut.cloudDatabase.query("docIDsForUpdating")["catch"](function(error) {
+            return typeof options.error === "function" ? options.error(error) : void 0;
+          }).then(function(result) {
+            var doc_ids;
+            doc_ids = _(result.rows).chain().pluck("id").without("_design/coconut").uniq().value();
+            _this.log("Updating " + doc_ids.length + " docs <small>(users and forms: " + (doc_ids.join(', ')) + ")</small>. Please wait.");
+            return Coconut.database.replicate.from(Coconut.config.cloud_url_with_credentials(), {
+              doc_ids: doc_ids
+            }).on('change', function(info) {
+              return console.log(info);
+            }).on('complete', function(info) {
+              console.log("COMPLETE");
+              console.log(info);
+              return Coconut.syncPlugins({
+                success: function() {
+                  return options != null ? typeof options.success === "function" ? options.success() : void 0 : void 0;
+                },
+                error: function() {
+                  return options != null ? typeof options.error === "function" ? options.error() : void 0 : void 0;
+                }
+              });
+            }).on('error', function(error) {
+              console.error(error);
+              _this.log("Error while updating application documents: " + (JSON.stringify(error)));
+              return typeof options.error === "function" ? options.error(error) : void 0;
+            });
+          });
+        };
+      })(this)
+    });
+  };
+
+  Sync.prototype.getNewNotifications = function(options) {
+    this.log("Looking for most recent Case Notification on tablet. Please wait.");
+    return Coconut.database.query("rawNotificationsConvertedToCaseNotifications", {
+      descending: true,
+      include_docs: true,
+      limit: 1
+    })["catch"]((function(_this) {
+      return function(error) {
+        return _this.log("Unable to find the the most recent case notification: " + (JSON.stringify(error)));
+      };
+    })(this)).then((function(_this) {
+      return function(result) {
+        var dateToStartLooking, mostRecentNotification, ref, ref1;
+        mostRecentNotification = (ref = result.rows) != null ? (ref1 = ref[0]) != null ? ref1.doc.date : void 0 : void 0;
+        if ((mostRecentNotification != null) && moment(mostRecentNotification).isBefore((new moment).subtract(3, 'weeks'))) {
+          dateToStartLooking = mostRecentNotification;
+        } else {
+          dateToStartLooking = (new moment).subtract(3, 'weeks').format(Coconut.config.get("date_format"));
+        }
+        return Coconut.database.get("district_language_mapping")["catch"](function(error) {
+          return alert("Couldn't find english_to_swahili map: " + (JSON.stringify(result)));
+        }).then(function(result) {
+          var district_language_mapping;
+          district_language_mapping = result.english_to_swahili;
+          _this.log("Looking for USSD notifications without Case Notifications after " + dateToStartLooking + ". Please wait.");
+          return Coconut.cloudDatabase.query("rawNotificationsNotConvertedToCaseNotifications", {
+            include_docs: true,
+            startkey: dateToStartLooking,
+            skip: 1
+          })["catch"](function(error) {
+            return _this.log("ERROR, could not download USSD notifications: " + (JSON.stringify(error)));
+          }).then(function(result) {
+            var currentUserDistrict;
+            currentUserDistrict = Coconut.currentUser.get("district");
+            if (district_language_mapping[currentUserDistrict] != null) {
+              currentUserDistrict = district_language_mapping[currentUserDistrict];
+            }
+            _this.log("Found " + result.rows.length + " USSD notifications. Filtering for USSD notifications for district:  " + currentUserDistrict + ". Please wait.");
+            _.each(result.rows, function(row) {
+              var districtForNotification, notification;
+              notification = row.doc;
+              districtForNotification = notification.facility_district;
+              if (district_language_mapping[districtForNotification] != null) {
+                districtForNotification = district_language_mapping[districtForNotification];
+              }
+              if (!_(GeoHierarchy.allDistricts()).contains(districtForNotification)) {
+                _this.log(districtForNotification + " not valid district, trying to use health facility: " + notification.hf + " to identify district");
+                if (FacilityHierarchy.getDistrict(notification.hf) != null) {
+                  districtForNotification = FacilityHierarchy.getDistrict(notification.hf);
+                  _this.log("Using district: " + districtForNotification + " indicated by health facility.");
+                } else {
+                  _this.log("Can't find a valid district for health facility: " + notification.hf);
+                }
+                if (!_(GeoHierarchy.allDistricts()).contains(districtForNotification)) {
+                  _this.log(districtForNotification + " still not valid district, trying to use shehia name to identify district: " + notification.shehia);
+                  if (GeoHierarchy.findOneShehia(notification.shehia) != null) {
+                    districtForNotification = GeoHierarchy.findOneShehia(notification.shehia).DISTRCT;
+                    _this.log("Using district: " + districtForNotification + " indicated by shehia.");
+                  } else {
+                    _this.log("Can't find a valid district using shehia for notification: " + (JSON.stringify(notification)) + ".");
+                  }
+                }
+              }
+              if (districtForNotification === currentUserDistrict) {
+                if (confirm("Accept new case? Facility: " + notification.hf + ", Shehia: " + notification.shehia + ", Name: " + notification.name + ", ID: " + notification.caseid + ", date: " + notification.date + ". You may need to coordinate with another DMSO.")) {
+                  _this.convertNotificationToCaseNotification(notification);
+                  return _this.log("Case notification " + notification.caseid + ", accepted by " + (User.currentUser.username()));
+                } else {
+                  return _this.log("Case notification " + notification.caseid + ", not accepted by " + (User.currentUser.username()));
+                }
+              }
+            });
+            return typeof options.success === "function" ? options.success() : void 0;
+          });
+        });
+      };
+    })(this));
+  };
+
+  Sync.prototype.convertNotificationToCaseNotification = function(notification) {
+    var result;
+    result = new Result({
+      question: "Case Notification",
+      MalariaCaseID: notification.caseid,
+      FacilityName: notification.hf,
+      Shehia: notification.shehia,
+      Name: notification.name
+    });
+    return result.save(null, {
+      error: (function(_this) {
+        return function(error) {
+          return _this.log("Could not save " + (result.toJSON()) + ":  " + (JSON.stringify(error)));
+        };
+      })(this),
+      success: (function(_this) {
+        return function(error) {
+          notification.hasCaseNotification = true;
+          return $.couch.db(Coconut.config.database_name()).saveDoc(notification, {
+            error: function(error) {
+              return _this.log("Could not save notification " + (JSON.stringify(notification)) + " : " + (JSON.stringify(error)));
+            },
+            success: function() {
+              var doc_ids;
+              _this.log("Created new case notification " + (result.get("MalariaCaseID")) + " for patient " + (result.get("Name")) + " at " + (result.get("FacilityName")));
+              doc_ids = [result.get("_id"), notification._id];
+              return $.couch.replicate(Coconut.config.database_name(), Coconut.config.cloud_url_with_credentials(), {
+                error: function(error) {
+                  return _this.log("Error replicating " + doc_ids + " back to server: " + (JSON.stringify(error)));
+                },
+                success: function(result) {
+                  _this.log("Sent docs: " + doc_ids);
+                  return _this.save({
+                    last_send_result: result,
+                    last_send_error: false,
+                    last_send_time: new Date().getTime()
+                  });
+                }
+              }, {
+                doc_ids: doc_ids
+              });
+            }
+          });
+        };
+      })(this)
+    });
+  };
+
+  Sync.prototype.transferCasesIn = function(options) {
+    $("#status").html("Checking for transfer cases...");
+    this.log("Checking cloud server for cases transferred to " + (Coconut.currentUser.username()));
+    return Coconut.cloudDatabase.query("resultsAndNotificationsNotReceivedByTargetUser", {
+      include_docs: true,
+      key: Coconut.currentUser.get("_id")
+    })["catch"]((function(_this) {
+      return function(error) {
+        _this.log("Could not retrieve list of resultsAndNotificationsNotReceivedByTargetUser for " + (Coconut.currentUser.get("_id")));
+        _this.log(error);
+        console.error(error);
+        if (options != null) {
+          options.error(error);
+        }
+        return _this.save({
+          last_send_error: true
+        });
+      };
+    })(this)).then((function(_this) {
+      return function(result) {
+        var caseSuccessHandler, cases;
+        cases = {};
+        _(result.rows).each(function(row) {
+          var caseId;
+          caseId = row.value[1];
+          if (!cases[caseId]) {
+            cases[caseId] = [];
+          }
+          return cases[caseId].push(row.doc);
+        });
+        caseSuccessHandler = _.after(_(cases).size(), options != null ? options.success : void 0);
+        if (_(cases).isEmpty()) {
+          _this.log("No cases to transfer.");
+          caseSuccessHandler();
+        }
+        return _(cases).each(function(resultDocs) {
+          var caseId, malariaCase, resultsSuccessHandler;
+          malariaCase = new Case();
+          malariaCase.loadFromResultDocs(resultDocs);
+          caseId = malariaCase.MalariaCaseID();
+          if (!confirm("Accept transfer case " + caseId + " " + (malariaCase.indexCasePatientName()) + " from facility " + (malariaCase.facility()) + " in " + (malariaCase.district()) + "?")) {
+            return caseSuccessHandler();
+          } else {
+            resultsSuccessHandler = _.after(resultDocs.length, caseSuccessHandler());
+            return _(resultDocs).each(function(resultDoc) {
+              resultDoc.transferred[resultDoc.transferred.length - 1].received = true;
+              return $.couch.db(Coconut.config.database_name()).saveDoc(resultDoc, {
+                error: function(error) {
+                  return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be saved on tablet: " + (JSON.stringify(error)));
+                },
+                success: function(success) {
+                  _this.log(caseId + ": " + (resultDoc.question || "Notification") + " saved on tablet");
+                  return $.couch.replicate(Coconut.config.database_name(), Coconut.config.cloud_url_with_credentials(), {
+                    success: function() {
+                      _this.log(caseId + ": " + (resultDoc.question || "Notification") + " marked as received in cloud");
+                      return resultsSuccessHandler();
+                    },
+                    error: function(error) {
+                      return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be marked as received in cloud. In case of conflict report to ZaMEP, otherwise press Get Data again. " + (JSON.stringify(error)));
+                    }
+                  }, {
+                    doc_ids: [resultDoc._id]
+                  });
+                }
+              });
+            });
+          }
+        });
+      };
+    })(this));
+  };
+
+  return Sync;
+
+})(Backbone.Model);
+
+module.exports = Sync;
+
+
+},{}],8:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
