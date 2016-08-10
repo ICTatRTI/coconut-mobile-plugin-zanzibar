@@ -6,6 +6,7 @@
   "dependencies": {
     "browserify": "^13.0.1",
     "coffeeify": "^2.0.1",
+    "colors": "^1.1.2",
     "underscore": "^1.8.3"
   },
   "devDependencies": {},

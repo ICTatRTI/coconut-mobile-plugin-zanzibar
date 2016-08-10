@@ -1987,7 +1987,6 @@ Sync = (function(superClass) {
                       _this.log("Updating users and forms. Please wait.");
                       return _this.replicateApplicationDocs({
                         error: function(error) {
-                          $.couch.logout();
                           _this.log("ERROR updating application: " + (JSON.stringify(error)));
                           _this.save({
                             last_get_success: false
@@ -2138,9 +2137,9 @@ Sync = (function(superClass) {
               if (districtForNotification === currentUserDistrict) {
                 if (confirm("Accept new case? Facility: " + notification.hf + ", Shehia: " + notification.shehia + ", Name: " + notification.name + ", ID: " + notification.caseid + ", date: " + notification.date + ". You may need to coordinate with another DMSO.")) {
                   _this.convertNotificationToCaseNotification(notification);
-                  return _this.log("Case notification " + notification.caseid + ", accepted by " + (User.currentUser.username()));
+                  return _this.log("Case notification " + notification.caseid + ", accepted by " + (Coconut.currentUser.username()));
                 } else {
-                  return _this.log("Case notification " + notification.caseid + ", not accepted by " + (User.currentUser.username()));
+                  return _this.log("Case notification " + notification.caseid + ", not accepted by " + (Coconut.currentUser.username()));
                 }
               }
             });
@@ -2169,30 +2168,24 @@ Sync = (function(superClass) {
       success: (function(_this) {
         return function(error) {
           notification.hasCaseNotification = true;
-          return $.couch.db(Coconut.config.database_name()).saveDoc(notification, {
-            error: function(error) {
-              return _this.log("Could not save notification " + (JSON.stringify(notification)) + " : " + (JSON.stringify(error)));
-            },
-            success: function() {
-              var doc_ids;
-              _this.log("Created new case notification " + (result.get("MalariaCaseID")) + " for patient " + (result.get("Name")) + " at " + (result.get("FacilityName")));
-              doc_ids = [result.get("_id"), notification._id];
-              return $.couch.replicate(Coconut.config.database_name(), Coconut.config.cloud_url_with_credentials(), {
-                error: function(error) {
-                  return _this.log("Error replicating " + doc_ids + " back to server: " + (JSON.stringify(error)));
-                },
-                success: function(result) {
-                  _this.log("Sent docs: " + doc_ids);
-                  return _this.save({
-                    last_send_result: result,
-                    last_send_error: false,
-                    last_send_time: new Date().getTime()
-                  });
-                }
-              }, {
-                doc_ids: doc_ids
+          return Coconut.database.put(notification)["catch"](function(error) {
+            return _this.log("Could not save notification " + (JSON.stringify(notification)) + " : " + (JSON.stringify(error)));
+          }).then(function() {
+            var doc_ids;
+            _this.log("Created new case notification " + (result.get("MalariaCaseID")) + " for patient " + (result.get("Name")) + " at " + (result.get("FacilityName")));
+            doc_ids = [result.get("_id"), notification._id];
+            return Coconut.database.replicate.to(Coconut.cloudDatabase, {
+              doc_ids: doc_ids
+            })["catch"](function(error) {
+              return _this.log("Error replicating " + doc_ids + " back to server: " + (JSON.stringify(error)));
+            }).then(function(result) {
+              _this.log("Sent docs: " + doc_ids);
+              return _this.save({
+                last_send_result: result,
+                last_send_error: false,
+                last_send_time: new Date().getTime()
               });
-            }
+            });
           });
         };
       })(this)
@@ -2245,24 +2238,18 @@ Sync = (function(superClass) {
             resultsSuccessHandler = _.after(resultDocs.length, caseSuccessHandler());
             return _(resultDocs).each(function(resultDoc) {
               resultDoc.transferred[resultDoc.transferred.length - 1].received = true;
-              return $.couch.db(Coconut.config.database_name()).saveDoc(resultDoc, {
-                error: function(error) {
-                  return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be saved on tablet: " + (JSON.stringify(error)));
-                },
-                success: function(success) {
-                  _this.log(caseId + ": " + (resultDoc.question || "Notification") + " saved on tablet");
-                  return $.couch.replicate(Coconut.config.database_name(), Coconut.config.cloud_url_with_credentials(), {
-                    success: function() {
-                      _this.log(caseId + ": " + (resultDoc.question || "Notification") + " marked as received in cloud");
-                      return resultsSuccessHandler();
-                    },
-                    error: function(error) {
-                      return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be marked as received in cloud. In case of conflict report to ZaMEP, otherwise press Get Data again. " + (JSON.stringify(error)));
-                    }
-                  }, {
-                    doc_ids: [resultDoc._id]
-                  });
-                }
+              return Coconut.database.put(resultDoc)["catch"](function(error) {
+                return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be saved on tablet: " + (JSON.stringify(error)));
+              }).then(function(result) {
+                _this.log(caseId + ": " + (resultDoc.question || "Notification") + " saved on tablet");
+                return Coconut.database.replicate.to(Coconut.cloudDatabase, {
+                  doc_ids: [resultDoc._id]
+                })["catch"](function(error) {
+                  return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be marked as received in cloud. In case of conflict report to ZaMEP, otherwise press Get Data again. " + (JSON.stringify(error)));
+                }).then(function() {
+                  _this.log(caseId + ": " + (resultDoc.question || "Notification") + " marked as received in cloud");
+                  return resultsSuccessHandler();
+                });
               });
             });
           }

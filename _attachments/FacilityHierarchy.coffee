@@ -9,8 +9,10 @@ class FacilityHierarchy
       @hierarchy = result.hierarchy
       # This is crappy programming - why is this static, but I can't refactor now
       @databaseObject = result
+      options?.success?()
     .catch (error) ->
       console.error error
+      options?.error?()
 
   #Note that the facilities after the line break are hospitals
 

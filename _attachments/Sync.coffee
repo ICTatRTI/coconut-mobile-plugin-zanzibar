@@ -137,7 +137,6 @@ class Sync extends Backbone.Model
                     @log "Updating users and forms. Please wait."
                     @replicateApplicationDocs
                       error: (error) =>
-                        $.couch.logout()
                         @log "ERROR updating application: #{JSON.stringify(error)}"
                         @save
                           last_get_success: false
@@ -249,9 +248,9 @@ class Sync extends Backbone.Model
 
               if confirm "Accept new case? Facility: #{notification.hf}, Shehia: #{notification.shehia}, Name: #{notification.name}, ID: #{notification.caseid}, date: #{notification.date}. You may need to coordinate with another DMSO."
                 @convertNotificationToCaseNotification(notification)
-                @log "Case notification #{notification.caseid}, accepted by #{User.currentUser.username()}"
+                @log "Case notification #{notification.caseid}, accepted by #{Coconut.currentUser.username()}"
               else
-                @log "Case notification #{notification.caseid}, not accepted by #{User.currentUser.username()}"
+                @log "Case notification #{notification.caseid}, not accepted by #{Coconut.currentUser.username()}"
           options.success?()
 
   convertNotificationToCaseNotification: (notification) =>
@@ -266,25 +265,21 @@ class Sync extends Backbone.Model
         @log "Could not save #{result.toJSON()}:  #{JSON.stringify error}"
       success: (error) =>
         notification.hasCaseNotification = true
-        $.couch.db(Coconut.config.database_name()).saveDoc notification,
-          error: (error) => @log "Could not save notification #{JSON.stringify(notification)} : #{JSON.stringify(error)}"
-          success: =>
-            @log "Created new case notification #{result.get "MalariaCaseID"} for patient #{result.get "Name"} at #{result.get "FacilityName"}"
-            doc_ids = [result.get("_id"), notification._id ]
-            # Sync results back to the 
-            $.couch.replicate(
-              Coconut.config.database_name(),
-              Coconut.config.cloud_url_with_credentials(),
-                error: (error) =>
-                  @log "Error replicating #{doc_ids} back to server: #{JSON.stringify error}"
-                success: (result) =>
-                  @log "Sent docs: #{doc_ids}"
-                  @save
-                    last_send_result: result
-                    last_send_error: false
-                    last_send_time: new Date().getTime()
-              , doc_ids: doc_ids
-            )
+        Coconut.database.put notification
+        .catch (error) => @log "Could not save notification #{JSON.stringify(notification)} : #{JSON.stringify(error)}"
+        .then =>
+          @log "Created new case notification #{result.get "MalariaCaseID"} for patient #{result.get "Name"} at #{result.get "FacilityName"}"
+          doc_ids = [result.get("_id"), notification._id ]
+          # Sync results back to the 
+          Coconut.database.replicate.to(Coconut.cloudDatabase, {doc_ids: doc_ids})
+          .catch (error) =>
+            @log "Error replicating #{doc_ids} back to server: #{JSON.stringify error}"
+          .then (result) =>
+            @log "Sent docs: #{doc_ids}"
+            @save
+              last_send_result: result
+              last_send_error: false
+              last_send_time: new Date().getTime()
 
   transferCasesIn: (options) =>
     $("#status").html "Checking for transfer cases..."
@@ -323,26 +318,17 @@ class Sync extends Backbone.Model
 
           _(resultDocs).each (resultDoc) =>
             resultDoc.transferred[resultDoc.transferred.length - 1].received = true
-            $.couch.db(Coconut.config.database_name()).saveDoc resultDoc,
-              error: (error) =>
-                @log "ERROR: #{caseId}: #{resultDoc.question or "Notification"} could not be saved on tablet: #{JSON.stringify error}"
-              success: (success) =>
-                @log "#{caseId}: #{resultDoc.question or "Notification"} saved on tablet"
+            Coconut.database.put resultDoc
+            .catch (error) =>
+              @log "ERROR: #{caseId}: #{resultDoc.question or "Notification"} could not be saved on tablet: #{JSON.stringify error}"
+            .then (result) =>
+              @log "#{caseId}: #{resultDoc.question or "Notification"} saved on tablet"
 
-                $.couch.replicate(
-                  Coconut.config.database_name(),
-                  Coconut.config.cloud_url_with_credentials(),
-                    success: =>
-                      @log "#{caseId}: #{resultDoc.question or "Notification"} marked as received in cloud"
-                      resultsSuccessHandler()
-                    error: (error) =>
-                      @log "ERROR: #{caseId}: #{resultDoc.question or "Notification"} could not be marked as received in cloud. In case of conflict report to ZaMEP, otherwise press Get Data again. #{JSON.stringify error}"
-                  ,
-                    doc_ids: [resultDoc._id]
-                )
-
+              Coconut.database.replicate.to(Coconut.cloudDatabase, doc_ids: [resultDoc._id])
+              .catch (error) =>
+                @log "ERROR: #{caseId}: #{resultDoc.question or "Notification"} could not be marked as received in cloud. In case of conflict report to ZaMEP, otherwise press Get Data again. #{JSON.stringify error}"
+              .then =>
+                @log "#{caseId}: #{resultDoc.question or "Notification"} marked as received in cloud"
+                resultsSuccessHandler()
 
 module.exports = Sync
-
-
-
