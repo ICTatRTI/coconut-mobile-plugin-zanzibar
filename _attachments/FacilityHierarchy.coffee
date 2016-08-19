@@ -65,9 +65,9 @@ class FacilityHierarchy
     @facilities(district)
 
   numbers: (district,facility) =>
-    foundFacility =  _(@hierarchy[district]).find (result) ->
+    _(@hierarchy[district]).find (result) ->
       result.facility is facility
-    foundFacility["mobile_numbers"]
+    .mobile_numbers
 
   update: (district,targetFacility,numbers, options) =>
     console.log numbers

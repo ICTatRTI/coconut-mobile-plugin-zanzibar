@@ -1,6 +1,7 @@
 # Use global to enable calling this from question sets
 global.GeoHierarchy = new (require './GeoHierarchy')()
-global.FacilityHierarchy = new (require './FacilityHierarchy')()
+global.FacilityHierarchy = GeoHierarchy
+#global.FacilityHierarchy = new (require './FacilityHierarchy')()
 global.Case = require './Case'
 global.HouseholdLocationSelectorView = require './HouseholdLocationSelectorView'
 global.SummaryView = require './SummaryView'

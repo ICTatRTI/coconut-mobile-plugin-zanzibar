@@ -1047,14 +1047,20 @@ module.exports = Case;
 
 
 },{}],2:[function(require,module,exports){
-var FacilityHierarchy,
+var GeoHierarchy, _,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
-FacilityHierarchy = (function() {
-  function FacilityHierarchy(options) {
+_ = require('underscore');
+
+GeoHierarchy = (function() {
+  var Unit, geohierarchy;
+
+  geohierarchy = void 0;
+
+  function GeoHierarchy(rawData) {
+    this.rawData = rawData;
     this.allPrivateFacilities = bind(this.allPrivateFacilities, this);
     this.facilityType = bind(this.facilityType, this);
-    this.update = bind(this.update, this);
     this.numbers = bind(this.numbers, this);
     this.facilitiesForZone = bind(this.facilitiesForZone, this);
     this.facilitiesForDistrict = bind(this.facilitiesForDistrict, this);
@@ -1062,158 +1068,6 @@ FacilityHierarchy = (function() {
     this.getZone = bind(this.getZone, this);
     this.getDistrict = bind(this.getDistrict, this);
     this.allFacilities = bind(this.allFacilities, this);
-    this.allDistricts = bind(this.allDistricts, this);
-    Coconut.database.get("Facility Hierarchy").then((function(_this) {
-      return function(result) {
-        _this.hierarchy = result.hierarchy;
-        return _this.databaseObject = result;
-      };
-    })(this))["catch"](function(error) {
-      return console.error(error);
-    });
-  }
-
-  FacilityHierarchy.prototype.allDistricts = function() {
-    return _.keys(this.hierarchy).sort();
-  };
-
-  FacilityHierarchy.prototype.allFacilities = function() {
-    return _.chain(this.hierarchy).values().flatten().pluck("facility").value();
-  };
-
-  FacilityHierarchy.prototype.getDistrict = function(facility) {
-    var result;
-    if (facility) {
-      facility = facility.trim();
-    }
-    result = null;
-    _.each(this.hierarchy, function(facilityData, district) {
-      if (_.chain(facilityData).pluck("facility").contains(facility).value()) {
-        return result = district;
-      }
-    });
-    if (result) {
-      return result;
-    }
-    _.each(this.hierarchy, function(facilityData, district) {
-      if (_.chain(facilityData).pluck("aliases").flatten().compact().contains(facility).value()) {
-        return result = district;
-      }
-    });
-    return result;
-  };
-
-  FacilityHierarchy.prototype.getZone = function(facility) {
-    var district, districtHierarchy, region;
-    district = this.getDistrict(facility);
-    districtHierarchy = GeoHierarchy.find(district, "DISTRICT");
-    if (districtHierarchy.length === 1) {
-      region = GeoHierarchy.find(district, "DISTRICT")[0].REGION;
-      if (region.match(/PEMBA/)) {
-        return "PEMBA";
-      } else {
-        return "UNGUJA";
-      }
-    }
-    return null;
-  };
-
-  FacilityHierarchy.prototype.facilities = function(district) {
-    return _.pluck(this.hierarchy[district], "facility");
-  };
-
-  FacilityHierarchy.prototype.facilitiesForDistrict = function(district) {
-    return this.facilities(district);
-  };
-
-  FacilityHierarchy.prototype.facilitiesForZone = function(zone) {
-    var districtsInZone;
-    districtsInZone = GeoHierarchy.districtsForZone(zone);
-    _.chain(districtsInZone).map((function(_this) {
-      return function(district) {
-        return _this.facilities(district);
-      };
-    })(this)).flatten().value();
-    return this.facilities(district);
-  };
-
-  FacilityHierarchy.prototype.numbers = function(district, facility) {
-    var foundFacility;
-    foundFacility = _(this.hierarchy[district]).find(function(result) {
-      return result.facility === facility;
-    });
-    return foundFacility["mobile_numbers"];
-  };
-
-  FacilityHierarchy.prototype.update = function(district, targetFacility, numbers, options) {
-    var facilityIndex;
-    console.log(numbers);
-    facilityIndex = -1;
-    _(this.hierarchy[district]).find(function(facility) {
-      facilityIndex++;
-      return facility['facility'] === targetFacility;
-    });
-    if (facilityIndex === -1) {
-      this.hierarchy[district].push({
-        facility: targetFacility,
-        mobile_numbers: numbers
-      });
-    } else {
-      this.hierarchy[district][facilityIndex] = {
-        facility: targetFacility,
-        mobile_numbers: numbers
-      };
-    }
-    this.databaseObject.hierarchy = this.hierarchy;
-    return Coconut.database.put(this.databaseObject)["catch"](error)(function() {
-      return console.error(error);
-    }).then(response)((function(_this) {
-      return function() {
-        _this.databaseObject._rev = response.rev;
-        return options != null ? options.success() : void 0;
-      };
-    })(this));
-  };
-
-  FacilityHierarchy.prototype.facilityType = function(facilityName) {
-    var result;
-    result = null;
-    _.each(this.hierarchy, function(facilities, district) {
-      var facility;
-      if (result === null) {
-        facility = _.find(facilities, function(facility) {
-          return facility.facility === facilityName;
-        });
-        if (facility) {
-          return result = facility.type.toUpperCase();
-        }
-      }
-    });
-    return result;
-  };
-
-  FacilityHierarchy.prototype.allPrivateFacilities = function() {
-    return _.chain(this.hierarchy).values().flatten().filter(function(facility) {
-      return facility.type === "private";
-    }).pluck("facility").value();
-  };
-
-  return FacilityHierarchy;
-
-})();
-
-module.exports = FacilityHierarchy;
-
-
-},{}],3:[function(require,module,exports){
-var GeoHierarchy, _,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
-
-_ = require('underscore');
-
-GeoHierarchy = (function() {
-  function GeoHierarchy(options) {
-    this.update = bind(this.update, this);
     this.all = bind(this.all, this);
     this.allUniqueShehiaNames = bind(this.allUniqueShehiaNames, this);
     this.allShehias = bind(this.allShehias, this);
@@ -1224,199 +1078,175 @@ GeoHierarchy = (function() {
     this.validShehia = bind(this.validShehia, this);
     this.findOneShehia = bind(this.findOneShehia, this);
     this.findShehia = bind(this.findShehia, this);
+    this.findAllAncestorsAtLevel = bind(this.findAllAncestorsAtLevel, this);
     this.findAllDescendantsAtLevel = bind(this.findAllDescendantsAtLevel, this);
     this.findChildrenNames = bind(this.findChildrenNames, this);
     this.findAllForLevel = bind(this.findAllForLevel, this);
+    this.findOneMatchOrUndefined = bind(this.findOneMatchOrUndefined, this);
+    this.findFirst = bind(this.findFirst, this);
     this.find = bind(this.find, this);
-    this.findInNodes = bind(this.findInNodes, this);
-    this.englishDistrictName = bind(this.englishDistrictName, this);
-    this.swahiliDistrictName = bind(this.swahiliDistrictName, this);
-    this.levels = ["REGION", "DISTRICT", "SHEHIA"];
-    Coconut.database.get("Geo Hierarchy")["catch"](function(error) {
-      console.error("Error loading Geo Hierarchy:");
-      console.error(error);
-      return options.error(error);
-    }).then((function(_this) {
-      return function(result) {
-        var addChildren, addLevelProperties;
-        _this.hierarchy = result.hierarchy;
-        _this.root = {
-          parent: null
-        };
-        addLevelProperties = function(node) {
-          var levelClimber;
-          levelClimber = node;
-          node[levelClimber.level] = levelClimber.name;
-          while (levelClimber.parent !== null) {
-            levelClimber = levelClimber.parent;
-            node[levelClimber.level] = levelClimber.name;
-          }
-          return node;
-        };
-        addChildren = function(node, values, levelNumber) {
-          var key, value;
-          if (_(values).isArray()) {
-            node.children = (function() {
-              var i, len, results1;
-              results1 = [];
-              for (i = 0, len = values.length; i < len; i++) {
-                value = values[i];
-                result = {
-                  parent: node,
-                  level: this.levels[levelNumber],
-                  name: value,
-                  children: null
-                };
-                results1.push(result = addLevelProperties(result));
-              }
-              return results1;
-            }).call(_this);
-            return node;
-          } else {
-            node.children = (function() {
-              var results1;
-              results1 = [];
-              for (key in values) {
-                value = values[key];
-                result = {
-                  parent: node,
-                  level: this.levels[levelNumber],
-                  name: key
-                };
-                result = addLevelProperties(result);
-                results1.push(addChildren(result, value, levelNumber + 1));
-              }
-              return results1;
-            }).call(_this);
-            return node;
-          }
-        };
-        addChildren(_this.root, _this.hierarchy, 0);
-        return Coconut.database.get("district_language_mapping")["catch"](function(error) {
-          console.error("Error loading district_language_mapping:");
-          console.error(error);
-          return options.error(error);
-        }).then(function(result) {
-          _this.englishToSwahiliDistrictMapping = result.english_to_swahili;
-          return options != null ? typeof options.success === "function" ? options.success() : void 0 : void 0;
-        });
-      };
-    })(this));
+    geohierarchy = this;
+    this.units = _(this.rawData.organisationUnits).map(function(rawUnit) {
+      return new Unit(rawUnit);
+    });
   }
 
-  GeoHierarchy.prototype.swahiliDistrictName = function(district) {
-    return this.englishToSwahiliDistrictMapping[district] || district;
-  };
+  Unit = (function() {
+    function Unit(rawUnit) {
+      this.descendantsAtLevel = bind(this.descendantsAtLevel, this);
+      this.descendants = bind(this.descendants, this);
+      this.ancestorAtLevel = bind(this.ancestorAtLevel, this);
+      this.ancestors = bind(this.ancestors, this);
+      this.parent = bind(this.parent, this);
+      var levelData;
+      this.name = rawUnit.name;
+      this.parentId = rawUnit.parentId;
+      this.level = rawUnit.level;
+      this.id = rawUnit.id;
+      levelData = _(this.rawData.organisationUnitLevels).find((function(_this) {
+        return function(level) {
+          return level.level === _this.level;
+        };
+      })(this));
+      this.levelName = levelData ? levelData.name : null;
+    }
 
-  GeoHierarchy.prototype.englishDistrictName = function(district) {
-    return _(this.englishToSwahiliDistrictMapping).invert()[district] || district;
-  };
-
-  GeoHierarchy.prototype.findInNodes = function(nodes, requiredProperties) {
-    var node, results;
-    results = _(nodes).where(requiredProperties);
-    if (_(results).isEmpty()) {
-      if (nodes != null) {
-        results = (function() {
-          var i, len, results1;
-          results1 = [];
-          for (i = 0, len = nodes.length; i < len; i++) {
-            node = nodes[i];
-            results1.push(this.findInNodes(node.children, requiredProperties));
-          }
-          return results1;
-        }).call(this);
+    Unit.prototype.parent = function() {
+      if (!this.parentId) {
+        return null;
       }
-      results = _.chain(results).flatten().compact().value();
-      if (_(results).isEmpty()) {
+      return _(geohierarchy.units).find((function(_this) {
+        return function(unit) {
+          return unit.id === _this.parentId;
+        };
+      })(this));
+    };
+
+    Unit.prototype.children = function() {
+      return _(geohierarchy.units).filter((function(_this) {
+        return function(unit) {
+          return unit.parentId === _this.id;
+        };
+      })(this));
+    };
+
+    Unit.prototype.ancestors = function() {
+      var parent;
+      parent = this.parent();
+      if (parent === null) {
         return [];
       }
-    }
-    return results;
-  };
-
-  GeoHierarchy.prototype.find = function(name, level) {
-    return this.findInNodes(this.root.children, {
-      name: name ? name.toUpperCase() : void 0,
-      level: level ? level.toUpperCase() : void 0
-    });
-  };
-
-  GeoHierarchy.prototype.findFirst = function(name, level) {
-    var result;
-    result = this.find(name, level);
-    if (result != null) {
-      return result[0];
-    } else {
-      return {};
-    }
-  };
-
-  GeoHierarchy.prototype.findAllForLevel = function(level) {
-    return this.findInNodes(this.root.children, {
-      level: level
-    });
-  };
-
-  GeoHierarchy.prototype.findChildrenNames = function(targetLevel, parentName) {
-    var indexOfTargetLevel, nodeResult, parentLevel;
-    indexOfTargetLevel = _(this.levels).indexOf(targetLevel);
-    parentLevel = this.levels[indexOfTargetLevel - 1];
-    nodeResult = this.findInNodes(this.root.children, {
-      name: parentName,
-      level: parentLevel
-    });
-    if (_(nodeResult).isEmpty()) {
-      return [];
-    }
-    if (nodeResult.length > 2) {
-      console.error("More than one match");
-    }
-    return _(nodeResult[0].children).pluck("name");
-  };
-
-  GeoHierarchy.prototype.findAllDescendantsAtLevel = function(name, sourceLevel, targetLevel) {
-    var getLevelDescendants, sourceNode;
-    getLevelDescendants = function(node) {
-      var childNode;
-      if (node.level === targetLevel) {
-        return node;
-      }
-      return (function() {
-        var i, len, ref, results1;
-        ref = node.children;
-        results1 = [];
-        for (i = 0, len = ref.length; i < len; i++) {
-          childNode = ref[i];
-          results1.push(getLevelDescendants(childNode));
-        }
-        return results1;
-      })();
+      return [parent].concat(parent.ancestors());
     };
-    sourceNode = this.find(name, sourceLevel);
-    return _.flatten(getLevelDescendants(sourceNode[0]));
+
+    Unit.prototype.ancestorAtLevel = function(levelName) {
+      return _(this.ancestors).find(function(ancestor) {
+        return ancestor.levelName === levelName;
+      });
+    };
+
+    Unit.prototype.descendants = function() {
+      var children;
+      children = this.children();
+      if (children === null) {
+        return [];
+      }
+      return children.concat(_(children).chain().map(function(child) {
+        return child.descendants();
+      }).flatten().compact().value());
+    };
+
+    Unit.prototype.descendantsAtLevel = function(levelName) {
+      return _(this.descendants()).filter(function(descendant) {
+        return descendant.levelName === levelName;
+      });
+    };
+
+    return Unit;
+
+  })();
+
+
+  /*
+  Note done:
+  swahiliDistrictName: (districtName) ->
+  englishDistrictName: (districtName) ->
+  findInNodes
+  update: (region,district,shehias) =>
+   */
+
+  GeoHierarchy.prototype.find = function(name, levelName) {
+    return _(this.units).filter(function(unit) {
+      return unit.levelName === levelName.toUpperCase() && (unit.name === name.toUpperCase() || _(unit.aliases).contains(name.toUpperCase()));
+    });
   };
 
-  GeoHierarchy.prototype.findShehia = function(targetShehia) {
-    return this.find(targetShehia, "SHEHIA");
+  GeoHierarchy.prototype.findFirst = function(name, levelName) {
+    return _(this.units).find(function(unit) {
+      return unit.levelName === levelName.toUpperCase() && (unit.name === name.toUpperCase() || _(unit.aliases).contains(name.toUpperCase()));
+    });
   };
 
-  GeoHierarchy.prototype.findOneShehia = function(targetShehia) {
-    var shehia;
-    shehia = this.findShehia(targetShehia);
-    switch (shehia.length) {
+  GeoHierarchy.prototype.findOneMatchOrUndefined = function(name, levelName) {
+    var matches;
+    matches = this.find(targetName, levelName);
+    switch (matches.length) {
       case 0:
         return null;
       case 1:
-        return shehia[0];
+        return matches[0];
       default:
         return void 0;
     }
   };
 
-  GeoHierarchy.prototype.validShehia = function(shehia) {
+  GeoHierarchy.prototype.findAllForLevel = function(levelName) {
+    return _(this.units).filter(function(unit) {
+      return unit.levelName === levelName.toUpperCase();
+    });
+  };
+
+  GeoHierarchy.prototype.findChildrenNames = function(targetLevelName, parentName) {
+    var parentNode;
+    parentNode = this.find(parentName, targetLevelName);
+    if (parentNode.length >= 2) {
+      console.error("More than one match");
+    }
+    return _(parentNode[0].children()).pluck("name");
+  };
+
+  GeoHierarchy.prototype.findAllDescendantsAtLevel = function(name, sourceLevelName, targetLevelName) {
+    var descendants;
+    descendants = this.findFirst(name, sourceLevelName).descendants();
+    return _(descendants).filter(function(descendant) {
+      return descendant.levelName === targetLevelName;
+    });
+  };
+
+  GeoHierarchy.prototype.findAllAncestorsAtLevel = function(name, sourceLevelName, targetLevelName) {
+    var ancestors;
+    ancestors = this.findFirst(name, sourceLevelName).ancestors();
+    return _(ancestors).filter(function(ancestor) {
+      return ancestor.levelName === targetLevelName;
+    });
+  };
+
+
+  /*
+    Zanzibar Specific Functions - should have generic equivalent above
+   */
+
+  GeoHierarchy.prototype.findShehia = function(shehiaName) {
+    return this.find(shehiaName, "SHEHIA");
+  };
+
+  GeoHierarchy.prototype.findOneShehia = function(shehiaName) {
+    return this.findOneMatchOrUndefined(shehiaName, "SHEHIA");
+  };
+
+  GeoHierarchy.prototype.validShehia = function(shehiaName) {
     var ref;
-    return ((ref = this.findShehia(shehia)) != null ? ref.length : void 0) > 0;
+    return ((ref = this.findShehia(shehiaName)) != null ? ref.length : void 0) > 0;
   };
 
   GeoHierarchy.prototype.findAllShehiaNamesFor = function(name, level) {
@@ -1440,48 +1270,25 @@ GeoHierarchy = (function() {
   };
 
   GeoHierarchy.prototype.allUniqueShehiaNames = function() {
-    return _(_.pluck(this.findAllForLevel("SHEHIA"), "name")).uniq();
+    return _(this.allShehias()).uniq();
   };
 
-  GeoHierarchy.prototype.all = function(geographicHierarchy) {
-    return _.pluck(this.findAllForLevel(geographicHierarchy.toUpperCase()), "name");
+  GeoHierarchy.prototype.all = function(levelName) {
+    return _.pluck(this.findAllForLevel(levelName), "name");
   };
 
-  GeoHierarchy.prototype.update = function(region, district, shehias) {
-    var geoHierarchy;
-    this.hierarchy[region][district] = shehias;
-    geoHierarchy = new GeoHierarchy();
-    return geoHierarchy.fetch({
-      error: function(error) {
-        return console.error(JSON.stringify(error));
-      },
-      success: (function(_this) {
-        return function(result) {
-          return geoHierarchy.save("hierarchy", _this.hierarchy, {
-            error: function(error) {
-              return console.error(JSON.stringify(error));
-            },
-            success: function() {
-              Coconut.debug("GeoHierarchy saved");
-              return this.load;
-            }
-          });
-        };
-      })(this)
+  GeoHierarchy.getZoneForDistrict = function(districtName) {
+    var district;
+    district = this.findOneMatchOrUndefined(districtName, "DISTRICT");
+    if (!district) {
+      return null;
+    }
+    return _(district.ancestors()).find(function(unit) {
+      return unit.levelName === "ZONE";
     });
   };
 
-  GeoHierarchy.getZoneForDistrict = function(district) {
-    var districtHierarchy, region;
-    districtHierarchy = this.find(district, "DISTRICT");
-    if (districtHierarchy.length === 1) {
-      region = this.find(district, "DISTRICT")[0].REGION;
-      return this.getZoneForRegion(region);
-    }
-    return null;
-  };
-
-  GeoHierarchy.getZoneForRegion = function(region) {
+  GeoHierarchy.getZoneForRegion = function(regionName) {
     if (region.match(/PEMBA/)) {
       return "PEMBA";
     } else {
@@ -1489,12 +1296,57 @@ GeoHierarchy = (function() {
     }
   };
 
-  GeoHierarchy.districtsForZone = function(zone) {
-    return _.chain(GeoHierarchy.allRegions()).map(function(region) {
-      if (GeoHierarchy.getZoneForRegion(region) === zone) {
-        return GeoHierarchy.findAllDistrictsFor(region, "REGION");
-      }
-    }).flatten().compact().value();
+  GeoHierarchy.districtsForZone = function(zoneName) {
+    return GeoHierarchy.findAllDescendantsAtLevel(zoneName, "ZONE", "DISTRICT");
+  };
+
+  GeoHierarchy.prototype.allFacilities = function() {
+    return _.pluck(this.findAllForLevel("FACILITY"), "name");
+  };
+
+  GeoHierarchy.prototype.getDistrict = function(facilityName) {
+    return this.findAllAncestorsAtLevel(facilityName, "FACILITY", "DISTRICT");
+  };
+
+  GeoHierarchy.prototype.getZone = function(facilityName) {
+    return this.findAllAncestorsAtLevel(facilityName, "FACILITY", "ZONE");
+  };
+
+  GeoHierarchy.prototype.facilities = function(districtName) {
+    return this.findAllDescendantsAtLevel(districtName, "DISTRICT", "FACILITY");
+  };
+
+  GeoHierarchy.prototype.facilitiesForDistrict = function(districtName) {
+    return this.facilities(district);
+  };
+
+  GeoHierarchy.prototype.facilitiesForZone = function(zoneName) {
+    return this.findAllDescendantsAtLevel(zoneName, "ZONE", "FACILITY");
+  };
+
+  GeoHierarchy.prototype.numbers = function(districtName, facilityName) {
+    return _(this.find(facilityName, "FACILITY")).chain().filter(function(facility) {
+      return facility.ancestorAtLevel("DISTRICT") === districtName;
+    }).map(function(facility) {
+      return facility.phoneNumber;
+    }).value();
+  };
+
+  GeoHierarchy.prototype.facilityType = function(facilityName) {
+    var facilityId, group;
+    facilityId = this.find(facilityName, "FACILITY").id;
+    group = _(this.rawData.organisationUnitGroups).find(function(group) {
+      return _(group.organisationUnits).find(function(unit) {
+        return unit.id === facilityId;
+      });
+    });
+    return group.name.toUpperCase();
+  };
+
+  GeoHierarchy.prototype.allPrivateFacilities = function() {
+    return _(this.rawData.organisationUnitGroups).chain().find(function(group) {
+      return group.name === "Private";
+    }).pluck("name").value();
   };
 
   return GeoHierarchy;
@@ -1504,7 +1356,7 @@ GeoHierarchy = (function() {
 module.exports = GeoHierarchy;
 
 
-},{"underscore":8}],4:[function(require,module,exports){
+},{"underscore":7}],3:[function(require,module,exports){
 var HouseholdLocationSelectorView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1606,13 +1458,13 @@ HouseholdLocationSelectorView = (function(superClass) {
 module.exports = HouseholdLocationSelectorView;
 
 
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 (function (global){
 var Sync, onStartup;
 
 global.GeoHierarchy = new (require('./GeoHierarchy'))();
 
-global.FacilityHierarchy = new (require('./FacilityHierarchy'))();
+global.FacilityHierarchy = GeoHierarchy;
 
 global.Case = require('./Case');
 
@@ -1750,7 +1602,7 @@ module.exports = Plugin;
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Case":1,"./FacilityHierarchy":2,"./GeoHierarchy":3,"./HouseholdLocationSelectorView":4,"./SummaryView":6,"./Sync":7}],6:[function(require,module,exports){
+},{"./Case":1,"./GeoHierarchy":2,"./HouseholdLocationSelectorView":3,"./SummaryView":5,"./Sync":6}],5:[function(require,module,exports){
 var SummaryView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1784,7 +1636,7 @@ SummaryView = (function(superClass) {
 module.exports = SummaryView;
 
 
-},{}],7:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 var Sync,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -2265,7 +2117,7 @@ Sync = (function(superClass) {
 module.exports = Sync;
 
 
-},{}],8:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -3815,5 +3667,5 @@ module.exports = Sync;
   }
 }.call(this));
 
-},{}]},{},[5])(5)
+},{}]},{},[4])(4)
 });
