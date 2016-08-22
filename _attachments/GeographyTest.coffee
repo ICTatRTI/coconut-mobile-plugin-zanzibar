@@ -20,6 +20,7 @@ global.Coconut =
 
 dhisHierarchy = new DHISHierarchy()
 dhisHierarchy.loadExtendExport
+  dhisDocumentName: "dhis2"
   error: (error) -> console.error error
   success: (result) ->
     geoHierarchy = new GeoHierarchy(result)
