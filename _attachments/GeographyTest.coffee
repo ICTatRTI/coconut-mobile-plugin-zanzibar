@@ -146,7 +146,6 @@ dhisHierarchy.loadExtendExport
 
             #findShehia: (targetShehia) =>
             testFunction("findOneShehia", "BOPWE", false, "name")
-            #validShehia: (shehia) =>
             testFunction("validShehia", "BOPWE")
             testFunction("validShehia", "KATI")
             #testFunction("findAllShehiaNamesFor", ["CENTRAL", "DISTRICT"])
@@ -160,8 +159,8 @@ dhisHierarchy.loadExtendExport
             testFunction("getZoneForDistrict", "KATI", true)
             testFunction("getZoneForRegion", "KASKAZINI PEMBA", false)
             testFunction("districtsForZone", "PEMBA", false, ["sort", "toString"])
-#            testFunctionFacility("allFacilities", null, true, ["sort", "toString"])
-            console.log (_.difference(facilityHierarchy.allFacilities(), geoHierarchy.allFacilities())).toString().red
+            testFunctionFacility("allFacilities", null, true, ["sort", "toString"])
+            #console.log (_.difference(facilityHierarchy.allFacilities(), geoHierarchy.allFacilities())).toString().red
             testFunctionFacility("getDistrict", "BAMBI")
             ###
             # FacilityHierarchy depends on GeoHierarchy so not easy to test
@@ -174,8 +173,8 @@ dhisHierarchy.loadExtendExport
             #testFunctionFacility("facilitiesForZone", "PEMBA", false, ["sort","toString"])
             testFunctionFacility("numbers", ["KATI","MWERA"], false, ["sort","toString"])
             testFunctionFacility("facilityType", "BAMBI")
-            #testFunctionFacility("allPrivateFacilities", null, true, ["sort", "toString"])
-            console.log (_.difference(facilityHierarchy.allPrivateFacilities(), geoHierarchy.allPrivateFacilities())).toString().red
+            testFunctionFacility("allPrivateFacilities", null, true, ["sort", "toString"])
+            #console.log (_.difference(facilityHierarchy.allPrivateFacilities(), geoHierarchy.allPrivateFacilities())).toString().red
 
 
             #update: (district,targetFacility,numbers, options) =>
