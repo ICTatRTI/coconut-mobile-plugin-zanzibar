@@ -1088,7 +1088,6 @@ DHISHierarchy = (function() {
   };
 
   DHISHierarchy.prototype.loadDHISHierarchy = function(options) {
-    console.log(options);
     return Coconut.database.get(options.dhisDocumentName)["catch"](function(error) {
       console.error("Error loading Geo Hierarchy:");
       console.error(error);
@@ -1845,42 +1844,11 @@ onStartup = function() {
           });
         }
       });
-      Coconut.menuView.renderHeader = function() {
-        var followup_url, incompleteResults, new_case_url, update_case_url;
-        new_case_url = "#zanzibar/show/results/Case Notification";
-        update_case_url = "#" + Coconut.databaseName + "/find/case";
-        followup_url = "#" + Coconut.databaseName + "/followups";
-        $(".mdl-layout__header-row").html((Coconut.questions.map(function(question) {
-          var questionId, url;
-          questionId = question.get("_id");
-          url = "#zanzibar/show/results/" + questionId;
-          return "<a style='padding-right:20px' class='drawer_question_set_link' href='" + url + "'>" + questionId + " <span id='incomplete_" + (question.safeLabel()) + "'></span></a> <!-- <a class='drawer_question_set_link' href='" + url + "'><i class='mdl-color-text--accent material-icons'>add</i></a> -->";
-        }).join("")) + " <a style='padding-right:20px' class='drawer_question_set_link' href='#zanzibar/summary'>Summary</a> <a style='position:absolute; top:0px; right:0px;' class='mdl-navigation__link' href='#" + Coconut.databaseName + "/sync'><i class='mdl-color-text--accent material-icons'>sync</i>Sync</a>");
-        incompleteResults = {};
-        Coconut.questions.each(function(question) {
-          return incompleteResults[question.get("_id")] = 0;
-        });
-        return Coconut.database.query("results/results", {
-          include_docs: false
-        }).then(function(result) {
-          _(result.rows).each(function(row) {
-            if (row.key[1] === false) {
-              return incompleteResults[row.key[0]] += 1;
-            }
-          });
-          return _(incompleteResults).each(function(amount, question) {
-            return $("#incomplete_" + (question.replace(/ /g, ''))).html(amount);
-          });
-        })["catch"](function(error) {
-          return console.error(error);
-        });
-      };
-      Coconut.menuView.renderHeader();
       originalResultsViewRender = ResultsView.prototype.render;
       return ResultsView.prototype.render = function() {
         originalResultsViewRender.apply(this, arguments);
         return _.delay(function() {
-          return $("[href=#not-complete-panel]")[0].click();
+          return $("[href='#not-complete-panel']")[0].click();
         }, 500);
       };
     }
@@ -2415,6 +2383,7 @@ module.exports = Sync;
 },{}],8:[function(require,module,exports){
 'use strict'
 
+exports.byteLength = byteLength
 exports.toByteArray = toByteArray
 exports.fromByteArray = fromByteArray
 
@@ -2422,23 +2391,17 @@ var lookup = []
 var revLookup = []
 var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
 
-function init () {
-  var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  for (var i = 0, len = code.length; i < len; ++i) {
-    lookup[i] = code[i]
-    revLookup[code.charCodeAt(i)] = i
-  }
-
-  revLookup['-'.charCodeAt(0)] = 62
-  revLookup['_'.charCodeAt(0)] = 63
+var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+for (var i = 0, len = code.length; i < len; ++i) {
+  lookup[i] = code[i]
+  revLookup[code.charCodeAt(i)] = i
 }
 
-init()
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
 
-function toByteArray (b64) {
-  var i, j, l, tmp, placeHolders, arr
+function placeHoldersCount (b64) {
   var len = b64.length
-
   if (len % 4 > 0) {
     throw new Error('Invalid string. Length must be a multiple of 4')
   }
@@ -2448,9 +2411,19 @@ function toByteArray (b64) {
   // represent one byte
   // if there is only one, then the three characters before it represent 2 bytes
   // this is just a cheap hack to not do indexOf twice
-  placeHolders = b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+  return b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+}
 
+function byteLength (b64) {
   // base64 is 4/3 + up to two characters of the original data
+  return b64.length * 3 / 4 - placeHoldersCount(b64)
+}
+
+function toByteArray (b64) {
+  var i, j, l, tmp, placeHolders, arr
+  var len = b64.length
+  placeHolders = placeHoldersCount(b64)
+
   arr = new Arr(len * 3 / 4 - placeHolders)
 
   // if there are placeholders, only get up to the last complete 4 chars
@@ -2579,7 +2552,7 @@ exports.kMaxLength = kMaxLength()
 function typedArraySupport () {
   try {
     var arr = new Uint8Array(1)
-    arr.foo = function () { return 42 }
+    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
     return arr.foo() === 42 && // typed array instances can be augmented
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
         arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
@@ -2692,6 +2665,8 @@ if (Buffer.TYPED_ARRAY_SUPPORT) {
 function assertSize (size) {
   if (typeof size !== 'number') {
     throw new TypeError('"size" argument must be a number')
+  } else if (size < 0) {
+    throw new RangeError('"size" argument must not be negative')
   }
 }
 
@@ -2723,7 +2698,7 @@ function allocUnsafe (that, size) {
   assertSize(size)
   that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
   if (!Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < size; i++) {
+    for (var i = 0; i < size; ++i) {
       that[i] = 0
     }
   }
@@ -2755,12 +2730,20 @@ function fromString (that, string, encoding) {
   var length = byteLength(string, encoding) | 0
   that = createBuffer(that, length)
 
-  that.write(string, encoding)
+  var actual = that.write(string, encoding)
+
+  if (actual !== length) {
+    // Writing a hex string, for example, that contains invalid characters will
+    // cause everything after the first invalid character to be ignored. (e.g.
+    // 'abxxcd' will be treated as 'ab')
+    that = that.slice(0, actual)
+  }
+
   return that
 }
 
 function fromArrayLike (that, array) {
-  var length = checked(array.length) | 0
+  var length = array.length < 0 ? 0 : checked(array.length) | 0
   that = createBuffer(that, length)
   for (var i = 0; i < length; i += 1) {
     that[i] = array[i] & 255
@@ -2779,7 +2762,9 @@ function fromArrayBuffer (that, array, byteOffset, length) {
     throw new RangeError('\'length\' is out of bounds')
   }
 
-  if (length === undefined) {
+  if (byteOffset === undefined && length === undefined) {
+    array = new Uint8Array(array)
+  } else if (length === undefined) {
     array = new Uint8Array(array, byteOffset)
   } else {
     array = new Uint8Array(array, byteOffset, length)
@@ -2827,7 +2812,7 @@ function fromObject (that, obj) {
 }
 
 function checked (length) {
-  // Note: cannot use `length < kMaxLength` here because that fails when
+  // Note: cannot use `length < kMaxLength()` here because that fails when
   // length is NaN (which is otherwise coerced to zero.)
   if (length >= kMaxLength()) {
     throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
@@ -2876,9 +2861,9 @@ Buffer.isEncoding = function isEncoding (encoding) {
     case 'utf8':
     case 'utf-8':
     case 'ascii':
+    case 'latin1':
     case 'binary':
     case 'base64':
-    case 'raw':
     case 'ucs2':
     case 'ucs-2':
     case 'utf16le':
@@ -2901,14 +2886,14 @@ Buffer.concat = function concat (list, length) {
   var i
   if (length === undefined) {
     length = 0
-    for (i = 0; i < list.length; i++) {
+    for (i = 0; i < list.length; ++i) {
       length += list[i].length
     }
   }
 
   var buffer = Buffer.allocUnsafe(length)
   var pos = 0
-  for (i = 0; i < list.length; i++) {
+  for (i = 0; i < list.length; ++i) {
     var buf = list[i]
     if (!Buffer.isBuffer(buf)) {
       throw new TypeError('"list" argument must be an Array of Buffers')
@@ -2939,10 +2924,8 @@ function byteLength (string, encoding) {
   for (;;) {
     switch (encoding) {
       case 'ascii':
+      case 'latin1':
       case 'binary':
-      // Deprecated
-      case 'raw':
-      case 'raws':
         return len
       case 'utf8':
       case 'utf-8':
@@ -3015,8 +2998,9 @@ function slowToString (encoding, start, end) {
       case 'ascii':
         return asciiSlice(this, start, end)
 
+      case 'latin1':
       case 'binary':
-        return binarySlice(this, start, end)
+        return latin1Slice(this, start, end)
 
       case 'base64':
         return base64Slice(this, start, end)
@@ -3064,6 +3048,20 @@ Buffer.prototype.swap32 = function swap32 () {
   for (var i = 0; i < len; i += 4) {
     swap(this, i, i + 3)
     swap(this, i + 1, i + 2)
+  }
+  return this
+}
+
+Buffer.prototype.swap64 = function swap64 () {
+  var len = this.length
+  if (len % 8 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 64-bits')
+  }
+  for (var i = 0; i < len; i += 8) {
+    swap(this, i, i + 7)
+    swap(this, i + 1, i + 6)
+    swap(this, i + 2, i + 5)
+    swap(this, i + 3, i + 4)
   }
   return this
 }
@@ -3150,7 +3148,73 @@ Buffer.prototype.compare = function compare (target, start, end, thisStart, this
   return 0
 }
 
-function arrayIndexOf (arr, val, byteOffset, encoding) {
+// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+//
+// Arguments:
+// - buffer - a Buffer to search
+// - val - a string, Buffer, or number
+// - byteOffset - an index into `buffer`; will be clamped to an int32
+// - encoding - an optional encoding, relevant is val is a string
+// - dir - true for indexOf, false for lastIndexOf
+function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+  // Empty buffer means no match
+  if (buffer.length === 0) return -1
+
+  // Normalize byteOffset
+  if (typeof byteOffset === 'string') {
+    encoding = byteOffset
+    byteOffset = 0
+  } else if (byteOffset > 0x7fffffff) {
+    byteOffset = 0x7fffffff
+  } else if (byteOffset < -0x80000000) {
+    byteOffset = -0x80000000
+  }
+  byteOffset = +byteOffset  // Coerce to Number.
+  if (isNaN(byteOffset)) {
+    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+    byteOffset = dir ? 0 : (buffer.length - 1)
+  }
+
+  // Normalize byteOffset: negative offsets start from the end of the buffer
+  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+  if (byteOffset >= buffer.length) {
+    if (dir) return -1
+    else byteOffset = buffer.length - 1
+  } else if (byteOffset < 0) {
+    if (dir) byteOffset = 0
+    else return -1
+  }
+
+  // Normalize val
+  if (typeof val === 'string') {
+    val = Buffer.from(val, encoding)
+  }
+
+  // Finally, search either indexOf (if dir is true) or lastIndexOf
+  if (Buffer.isBuffer(val)) {
+    // Special case: looking for empty string/buffer always fails
+    if (val.length === 0) {
+      return -1
+    }
+    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+  } else if (typeof val === 'number') {
+    val = val & 0xFF // Search for a byte value [0-255]
+    if (Buffer.TYPED_ARRAY_SUPPORT &&
+        typeof Uint8Array.prototype.indexOf === 'function') {
+      if (dir) {
+        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
+      } else {
+        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
+      }
+    }
+    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
+  }
+
+  throw new TypeError('val must be string, number or Buffer')
+}
+
+function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
   var indexSize = 1
   var arrLength = arr.length
   var valLength = val.length
@@ -3177,59 +3241,45 @@ function arrayIndexOf (arr, val, byteOffset, encoding) {
     }
   }
 
-  var foundIndex = -1
-  for (var i = 0; byteOffset + i < arrLength; i++) {
-    if (read(arr, byteOffset + i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
-      if (foundIndex === -1) foundIndex = i
-      if (i - foundIndex + 1 === valLength) return (byteOffset + foundIndex) * indexSize
-    } else {
-      if (foundIndex !== -1) i -= i - foundIndex
-      foundIndex = -1
+  var i
+  if (dir) {
+    var foundIndex = -1
+    for (i = byteOffset; i < arrLength; i++) {
+      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+        if (foundIndex === -1) foundIndex = i
+        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+      } else {
+        if (foundIndex !== -1) i -= i - foundIndex
+        foundIndex = -1
+      }
+    }
+  } else {
+    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+    for (i = byteOffset; i >= 0; i--) {
+      var found = true
+      for (var j = 0; j < valLength; j++) {
+        if (read(arr, i + j) !== read(val, j)) {
+          found = false
+          break
+        }
+      }
+      if (found) return i
     }
   }
+
   return -1
-}
-
-Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
-  if (typeof byteOffset === 'string') {
-    encoding = byteOffset
-    byteOffset = 0
-  } else if (byteOffset > 0x7fffffff) {
-    byteOffset = 0x7fffffff
-  } else if (byteOffset < -0x80000000) {
-    byteOffset = -0x80000000
-  }
-  byteOffset >>= 0
-
-  if (this.length === 0) return -1
-  if (byteOffset >= this.length) return -1
-
-  // Negative offsets start from the end of the buffer
-  if (byteOffset < 0) byteOffset = Math.max(this.length + byteOffset, 0)
-
-  if (typeof val === 'string') {
-    val = Buffer.from(val, encoding)
-  }
-
-  if (Buffer.isBuffer(val)) {
-    // special case: looking for empty string/buffer always fails
-    if (val.length === 0) {
-      return -1
-    }
-    return arrayIndexOf(this, val, byteOffset, encoding)
-  }
-  if (typeof val === 'number') {
-    if (Buffer.TYPED_ARRAY_SUPPORT && Uint8Array.prototype.indexOf === 'function') {
-      return Uint8Array.prototype.indexOf.call(this, val, byteOffset)
-    }
-    return arrayIndexOf(this, [ val ], byteOffset, encoding)
-  }
-
-  throw new TypeError('val must be string, number or Buffer')
 }
 
 Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
   return this.indexOf(val, byteOffset, encoding) !== -1
+}
+
+Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+}
+
+Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
 }
 
 function hexWrite (buf, string, offset, length) {
@@ -3246,12 +3296,12 @@ function hexWrite (buf, string, offset, length) {
 
   // must be an even number of digits
   var strLen = string.length
-  if (strLen % 2 !== 0) throw new Error('Invalid hex string')
+  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
 
   if (length > strLen / 2) {
     length = strLen / 2
   }
-  for (var i = 0; i < length; i++) {
+  for (var i = 0; i < length; ++i) {
     var parsed = parseInt(string.substr(i * 2, 2), 16)
     if (isNaN(parsed)) return i
     buf[offset + i] = parsed
@@ -3267,7 +3317,7 @@ function asciiWrite (buf, string, offset, length) {
   return blitBuffer(asciiToBytes(string), buf, offset, length)
 }
 
-function binaryWrite (buf, string, offset, length) {
+function latin1Write (buf, string, offset, length) {
   return asciiWrite(buf, string, offset, length)
 }
 
@@ -3329,8 +3379,9 @@ Buffer.prototype.write = function write (string, offset, length, encoding) {
       case 'ascii':
         return asciiWrite(this, string, offset, length)
 
+      case 'latin1':
       case 'binary':
-        return binaryWrite(this, string, offset, length)
+        return latin1Write(this, string, offset, length)
 
       case 'base64':
         // Warning: maxLength not taken into account in base64Write
@@ -3465,17 +3516,17 @@ function asciiSlice (buf, start, end) {
   var ret = ''
   end = Math.min(buf.length, end)
 
-  for (var i = start; i < end; i++) {
+  for (var i = start; i < end; ++i) {
     ret += String.fromCharCode(buf[i] & 0x7F)
   }
   return ret
 }
 
-function binarySlice (buf, start, end) {
+function latin1Slice (buf, start, end) {
   var ret = ''
   end = Math.min(buf.length, end)
 
-  for (var i = start; i < end; i++) {
+  for (var i = start; i < end; ++i) {
     ret += String.fromCharCode(buf[i])
   }
   return ret
@@ -3488,7 +3539,7 @@ function hexSlice (buf, start, end) {
   if (!end || end < 0 || end > len) end = len
 
   var out = ''
-  for (var i = start; i < end; i++) {
+  for (var i = start; i < end; ++i) {
     out += toHex(buf[i])
   }
   return out
@@ -3531,7 +3582,7 @@ Buffer.prototype.slice = function slice (start, end) {
   } else {
     var sliceLen = end - start
     newBuf = new Buffer(sliceLen, undefined)
-    for (var i = 0; i < sliceLen; i++) {
+    for (var i = 0; i < sliceLen; ++i) {
       newBuf[i] = this[i + start]
     }
   }
@@ -3758,7 +3809,7 @@ Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
 
 function objectWriteUInt16 (buf, value, offset, littleEndian) {
   if (value < 0) value = 0xffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; i++) {
+  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
     buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
       (littleEndian ? i : 1 - i) * 8
   }
@@ -3792,7 +3843,7 @@ Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert
 
 function objectWriteUInt32 (buf, value, offset, littleEndian) {
   if (value < 0) value = 0xffffffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; i++) {
+  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
     buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
   }
 }
@@ -4007,12 +4058,12 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
 
   if (this === target && start < targetStart && targetStart < end) {
     // descending copy from end
-    for (i = len - 1; i >= 0; i--) {
+    for (i = len - 1; i >= 0; --i) {
       target[i + targetStart] = this[i + start]
     }
   } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
     // ascending copy from start
-    for (i = 0; i < len; i++) {
+    for (i = 0; i < len; ++i) {
       target[i + targetStart] = this[i + start]
     }
   } else {
@@ -4073,7 +4124,7 @@ Buffer.prototype.fill = function fill (val, start, end, encoding) {
 
   var i
   if (typeof val === 'number') {
-    for (i = start; i < end; i++) {
+    for (i = start; i < end; ++i) {
       this[i] = val
     }
   } else {
@@ -4081,7 +4132,7 @@ Buffer.prototype.fill = function fill (val, start, end, encoding) {
       ? val
       : utf8ToBytes(new Buffer(val, encoding).toString())
     var len = bytes.length
-    for (i = 0; i < end - start; i++) {
+    for (i = 0; i < end - start; ++i) {
       this[i + start] = bytes[i % len]
     }
   }
@@ -4123,7 +4174,7 @@ function utf8ToBytes (string, units) {
   var leadSurrogate = null
   var bytes = []
 
-  for (var i = 0; i < length; i++) {
+  for (var i = 0; i < length; ++i) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
@@ -4198,7 +4249,7 @@ function utf8ToBytes (string, units) {
 
 function asciiToBytes (str) {
   var byteArray = []
-  for (var i = 0; i < str.length; i++) {
+  for (var i = 0; i < str.length; ++i) {
     // Node's code seems to be doing this and not & 0x7F..
     byteArray.push(str.charCodeAt(i) & 0xFF)
   }
@@ -4208,7 +4259,7 @@ function asciiToBytes (str) {
 function utf16leToBytes (str, units) {
   var c, hi, lo
   var byteArray = []
-  for (var i = 0; i < str.length; i++) {
+  for (var i = 0; i < str.length; ++i) {
     if ((units -= 2) < 0) break
 
     c = str.charCodeAt(i)
@@ -4226,7 +4277,7 @@ function base64ToBytes (str) {
 }
 
 function blitBuffer (src, dst, offset, length) {
-  for (var i = 0; i < length; i++) {
+  for (var i = 0; i < length; ++i) {
     if ((i + offset >= dst.length) || (i >= src.length)) break
     dst[i + offset] = src[i]
   }
@@ -4240,7 +4291,7 @@ function isnan (val) {
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{"base64-js":8,"ieee754":11,"isarray":12}],10:[function(require,module,exports){
 (function (Buffer){
-//  Chance.js 1.0.4
+//  Chance.js 1.0.6
 //  http://chancejs.com
 //  (c) 2013 Victor Quinn
 //  Chance may be freely distributed or modified under the MIT license.
@@ -4304,7 +4355,7 @@ function isnan (val) {
         return this;
     }
 
-    Chance.prototype.VERSION = "1.0.4";
+    Chance.prototype.VERSION = "1.0.6";
 
     // Random helper functions
     function initOptions(options, defaults) {
@@ -4496,6 +4547,27 @@ function isnan (val) {
         testRange(options.min < 0, "Chance: Min cannot be less than zero.");
         return this.integer(options);
     };
+	
+	/**
+     *  Return a random hex number as string
+     *
+     *  NOTE the max and min are INCLUDED in the range. So:
+     *  chance.hex({min: '9', max: 'B'});
+     *  would return either '9', 'A' or 'B'.
+     *
+     *  @param {Object} [options={}] can specify a min and/or max and/or casing
+     *  @returns {String} a single random string hex number
+     *  @throws {RangeError} min cannot be greater than max
+     */
+    Chance.prototype.hex = function (options) {
+        options = initOptions(options, {min: 0, max: MAX_INT, casing: 'lower'});
+        testRange(options.min < 0, "Chance: Min cannot be less than zero.");
+		var integer = this.natural({min: options.min, max: options.max});
+		if (options.casing === 'upper') {
+			return integer.toString(16).toUpperCase();
+		}
+		return integer.toString(16);
+    };
 
     /**
      *  Return a random string
@@ -4675,6 +4747,10 @@ function isnan (val) {
         var val;
         for (var weightIndex = 0; weightIndex < weights.length; ++weightIndex) {
             val = weights[weightIndex];
+            if (isNaN(val)) {
+                throw new RangeError("all weights must be numbers");
+            }
+
             if (val > 0) {
                 sum += val;
             }
@@ -4923,6 +4999,10 @@ function isnan (val) {
     Chance.prototype.first = function (options) {
         options = initOptions(options, {gender: this.gender(), nationality: 'en'});
         return this.pick(this.get("firstNames")[options.gender.toLowerCase()][options.nationality.toLowerCase()]);
+    };
+
+    Chance.prototype.profession = function () {
+        return this.pick(this.get("professions"));
     };
 
     Chance.prototype.gender = function (options) {
@@ -5298,43 +5378,100 @@ function isnan (val) {
      *
      * * Make color uppercase
      * chance.color({casing: 'upper'})  => '#29CFA7'
+	 
+	 * * Min Max values for RGBA
+	 * var light_red = chance.color({format: 'hex', min_red: 200, max_red: 255, max_green: 0, max_blue: 0, min_alpha: .2, max_alpha: .3});
      *
      * @param  [object] options
      * @return [string] color value
      */
     Chance.prototype.color = function (options) {
-
+		function pad(n, width, z) {
+			z = z || '0';
+			n = n + '';
+			return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+		}
+		
         function gray(value, delimiter) {
             return [value, value, value].join(delimiter || '');
         }
 
         function rgb(hasAlpha) {
-
-            var rgbValue    = (hasAlpha)    ? 'rgba' : 'rgb';
-            var alphaChanal = (hasAlpha)    ? (',' + this.floating({min:0, max:1})) : "";
-            var colorValue  = (isGrayscale) ? (gray(this.natural({max: 255}), ',')) : (this.natural({max: 255}) + ',' + this.natural({max: 255}) + ',' + this.natural({max: 255}));
-
-            return rgbValue + '(' + colorValue + alphaChanal + ')';
+            var rgbValue     = (hasAlpha)    ? 'rgba' : 'rgb';
+            var alphaChannel = (hasAlpha)    ? (',' + this.floating({min:min_alpha, max:max_alpha})) : "";
+            var colorValue   = (isGrayscale) ? (gray(this.natural({min: min_rgb, max: max_rgb}), ',')) : (this.natural({min: min_green, max: max_green}) + ',' + this.natural({min: min_blue, max: max_blue}) + ',' + this.natural({max: 255}));
+            return rgbValue + '(' + colorValue + alphaChannel + ')';
         }
 
         function hex(start, end, withHash) {
-
-            var simbol = (withHash) ? "#" : "";
-            var expression  = (isGrayscale ? gray(this.hash({length: start})) : this.hash({length: end}));
-            return simbol + expression;
+            var symbol = (withHash) ? "#" : "";
+			var hexstring = "";
+			
+			if (isGrayscale) {
+				hexstring = gray(pad(this.hex({min: min_rgb, max: max_rgb}), 2));
+				if (options.format === "shorthex") {
+					hexstring = gray(this.hex({min: 0, max: 15}));
+					console.log("hex: " + hexstring);
+				}
+			}
+			else {
+				if (options.format === "shorthex") {
+					hexstring = pad(this.hex({min: Math.floor(min_red / 16), max: Math.floor(max_red / 16)}), 1) + pad(this.hex({min: Math.floor(min_green / 16), max: Math.floor(max_green / 16)}), 1) + pad(this.hex({min: Math.floor(min_blue / 16), max: Math.floor(max_blue / 16)}), 1);
+				}
+				else if (min_red !== undefined || max_red !== undefined || min_green !== undefined || max_green !== undefined || min_blue !== undefined || max_blue !== undefined) {
+					hexstring = pad(this.hex({min: min_red, max: max_red}), 2) + pad(this.hex({min: min_green, max: max_green}), 2) + pad(this.hex({min: min_blue, max: max_blue}), 2);
+				}
+				else {
+					hexstring = pad(this.hex({min: min_rgb, max: max_rgb}), 2) + pad(this.hex({min: min_rgb, max: max_rgb}), 2) + pad(this.hex({min: min_rgb, max: max_rgb}), 2);
+				}
+			}
+			
+            return symbol + hexstring;
         }
 
         options = initOptions(options, {
             format: this.pick(['hex', 'shorthex', 'rgb', 'rgba', '0x', 'name']),
             grayscale: false,
-            casing: 'lower'
+            casing: 'lower', 
+			min: 0, 
+			max: 255, 
+			min_red: undefined,
+			max_red: undefined, 
+			min_green: undefined,
+			max_green: undefined, 
+			min_blue: undefined, 
+			max_blue: undefined, 
+			min_alpha: 0,
+			max_alpha: 1
         });
 
         var isGrayscale = options.grayscale;
+		var min_rgb = options.min;
+		var max_rgb = options.max;		
+		var min_red = options.min_red;
+		var max_red = options.max_red;
+		var min_green = options.min_green;
+		var max_green = options.max_green;
+		var min_blue = options.min_blue;
+		var max_blue = options.max_blue;
+		var min_alpha = options.min_alpha;
+		var max_alpha = options.max_alpha;
+		if (options.min_red === undefined) { min_red = min_rgb; }
+		if (options.max_red === undefined) { max_red = max_rgb; }
+		if (options.min_green === undefined) { min_green = min_rgb; }
+		if (options.max_green === undefined) { max_green = max_rgb; }
+		if (options.min_blue === undefined) { min_blue = min_rgb; }
+		if (options.max_blue === undefined) { max_blue = max_rgb; }
+		if (options.min_alpha === undefined) { min_alpha = 0; }
+		if (options.max_alpha === undefined) { max_alpha = 1; }
+		if (isGrayscale && min_rgb === 0 && max_rgb === 255 && min_red !== undefined && max_red !== undefined) {			
+			min_rgb = ((min_red + min_green + min_blue) / 3);
+			max_rgb = ((max_red + max_green + max_blue) / 3);
+		}
         var colorValue;
 
         if (options.format === 'hex') {
-            colorValue =  hex.call(this, 2, 6, true);
+            colorValue = hex.call(this, 2, 6, true);
         }
         else if (options.format === 'shorthex') {
             colorValue = hex.call(this, 1, 3, true);
@@ -5440,6 +5577,10 @@ function isnan (val) {
         var domain = options.domain_prefix ? options.domain_prefix + "." + options.domain : options.domain;
 
         return options.protocol + "://" + domain + "/" + options.path + extension;
+    };
+
+    Chance.prototype.port = function() {
+        return this.integer({min: 0, max: 65535});
     };
 
     // -- End Web --
@@ -5558,6 +5699,7 @@ function isnan (val) {
                 if (!options.mobile) {
                     numPick = this.pick([
                         //valid area codes of major cities/counties followed by random numbers in required format.
+
                         { area: '01' + this.character({ pool: '234569' }) + '1 ', sections: [3,4] },
                         { area: '020 ' + this.character({ pool: '378' }), sections: [3,4] },
                         { area: '023 ' + this.character({ pool: '89' }), sections: [3,4] },
@@ -5581,6 +5723,30 @@ function isnan (val) {
                     phone = options.formatted ? ukNum(numPick) : ukNum(numPick).replace(' ', '');
                 }
                 break;
+            case 'za':
+                if (!options.mobile) {
+                    numPick = this.pick([
+                       '01' + this.pick(['0', '1', '2', '3', '4', '5', '6', '7', '8']) + self.string({ pool: '0123456789', length: 7}),
+                       '02' + this.pick(['1', '2', '3', '4', '7', '8']) + self.string({ pool: '0123456789', length: 7}),
+                       '03' + this.pick(['1', '2', '3', '5', '6', '9']) + self.string({ pool: '0123456789', length: 7}),
+                       '04' + this.pick(['1', '2', '3', '4', '5','6','7', '8','9']) + self.string({ pool: '0123456789', length: 7}),   
+                       '05' + this.pick(['1', '3', '4', '6', '7', '8']) + self.string({ pool: '0123456789', length: 7}),
+                    ]);
+                    phone = options.formatted || numPick;
+                } else {
+                    numPick = this.pick([
+                        '060' + this.pick(['3','4','5','6','7','8','9']) + self.string({ pool: '0123456789', length: 6}),
+                        '061' + this.pick(['0','1','2','3','4','5','8']) + self.string({ pool: '0123456789', length: 6}),
+                        '06'  + self.string({ pool: '0123456789', length: 7}),
+                        '071' + this.pick(['0','1','2','3','4','5','6','7','8','9']) + self.string({ pool: '0123456789', length: 6}),
+                        '07'  + this.pick(['2','3','4','6','7','8','9']) + self.string({ pool: '0123456789', length: 7}),
+                        '08'  + this.pick(['0','1','2','3','4','5']) + self.string({ pool: '0123456789', length: 7}),                     
+                    ]);
+                    phone = options.formatted || numPick;
+                }
+                
+                break;
+
             case 'us':
                 var areacode = this.areacode(options).toString();
                 var exchange = this.natural({ min: 2, max: 9 }).toString() +
@@ -6011,6 +6177,21 @@ function isnan (val) {
         }
     };
 
+    /**
+     * Generate a string matching IBAN pattern (https://en.wikipedia.org/wiki/International_Bank_Account_Number). 
+     * No country-specific formats support (yet)
+     */
+    Chance.prototype.iban = function () {
+        var alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        var alphanum = alpha + '0123456789';
+        var iban = 
+            this.string({ length: 2, pool: alpha }) + 
+            this.pad(this.integer({ min: 0, max: 99 }), 2) + 
+            this.string({ length: 4, pool: alphanum }) + 
+            this.pad(this.natural(), this.natural({ min: 6, max: 26 }));
+        return iban;
+    };
+
     // -- End Finance
 
     // -- Regional
@@ -6267,58 +6448,58 @@ function isnan (val) {
     /**
      * #Description:
      * =====================================================
-     * Generate random file name with extention
+     * Generate random file name with extension
      *
-     * The argument provide extention type
+     * The argument provide extension type
      * -> raster
      * -> vector
      * -> 3d
      * -> document
      *
-     * If noting is provided the function return random file name with random
-     * extention type of any kind
+     * If nothing is provided the function return random file name with random
+     * extension type of any kind
      *
      * The user can validate the file name length range
-     * If noting provided the generated file name is radom
+     * If nothing provided the generated file name is random
      *
-     * #Extention Pool :
-     * * Currently the supported extentions are
-     *  -> some of the most popular raster image extentions
-     *  -> some of the most popular vector image extentions
-     *  -> some of the most popular 3d image extentions
-     *  -> some of the most popular document extentions
+     * #Extension Pool :
+     * * Currently the supported extensions are
+     *  -> some of the most popular raster image extensions
+     *  -> some of the most popular vector image extensions
+     *  -> some of the most popular 3d image extensions
+     *  -> some of the most popular document extensions
      *
      * #Examples :
      * =====================================================
      *
-     * Return random file name with random extention. The file extention
-     * is provided by a predifined collection of extentions. More abouth the extention
-     * pool can be fond in #Extention Pool section
+     * Return random file name with random extension. The file extension
+     * is provided by a predefined collection of extensions. More about the extension
+     * pool can be found in #Extension Pool section
      *
      * chance.file()
      * => dsfsdhjf.xml
      *
-     * In order to generate a file name with sspecific length, specify the
-     * length property and integer value. The extention is going to be random
+     * In order to generate a file name with specific length, specify the
+     * length property and integer value. The extension is going to be random
      *
      * chance.file({length : 10})
      * => asrtineqos.pdf
      *
-     * In order to geerate file with extention form some of the predifined groups
-     * of the extention pool just specify the extenton pool category in fileType property
+     * In order to generate file with extension from some of the predefined groups
+     * of the extension pool just specify the extension pool category in fileType property
      *
      * chance.file({fileType : 'raster'})
      * => dshgssds.psd
      *
-     * You can provide specific extention for your files
-     * chance.file({extention : 'html'})
+     * You can provide specific extension for your files
+     * chance.file({extension : 'html'})
      * => djfsd.html
      *
-     * Or you could pass custom collection of extentons bt array or by object
-     * chance.file({extentions : [...]})
+     * Or you could pass custom collection of extensions by array or by object
+     * chance.file({extensions : [...]})
      * => dhgsdsd.psd
      *
-     * chance.file({extentions : { key : [...], key : [...]}})
+     * chance.file({extensions : { key : [...], key : [...]}})
      * => djsfksdjsd.xml
      *
      * @param  [collection] options
@@ -6331,54 +6512,54 @@ function isnan (val) {
         var poolCollectionKey = "fileExtension";
         var typeRange   = Object.keys(this.get("fileExtension"));//['raster', 'vector', '3d', 'document'];
         var fileName;
-        var fileExtention;
+        var fileExtension;
 
         // Generate random file name
         fileName = this.word({length : fileOptions.length});
 
-        // Generate file by specific extention provided by the user
-        if(fileOptions.extention) {
+        // Generate file by specific extension provided by the user
+        if(fileOptions.extension) {
 
-            fileExtention = fileOptions.extention;
-            return (fileName + '.' + fileExtention);
+            fileExtension = fileOptions.extension;
+            return (fileName + '.' + fileExtension);
         }
 
-        // Generate file by specific axtention collection
-        if(fileOptions.extentions) {
+        // Generate file by specific extension collection
+        if(fileOptions.extensions) {
 
-            if(Array.isArray(fileOptions.extentions)) {
+            if(Array.isArray(fileOptions.extensions)) {
 
-                fileExtention = this.pickone(fileOptions.extentions);
-                return (fileName + '.' + fileExtention);
+                fileExtension = this.pickone(fileOptions.extensions);
+                return (fileName + '.' + fileExtension);
             }
-            else if(fileOptions.extentions.constructor === Object) {
+            else if(fileOptions.extensions.constructor === Object) {
 
-                var extentionObjectCollection = fileOptions.extentions;
-                var keys = Object.keys(extentionObjectCollection);
+                var extensionObjectCollection = fileOptions.extensions;
+                var keys = Object.keys(extensionObjectCollection);
 
-                fileExtention = this.pickone(extentionObjectCollection[this.pickone(keys)]);
-                return (fileName + '.' + fileExtention);
+                fileExtension = this.pickone(extensionObjectCollection[this.pickone(keys)]);
+                return (fileName + '.' + fileExtension);
             }
 
             throw new Error("Expect collection of type Array or Object to be passed as an argument ");
         }
 
-        // Generate file extention based on specific file type
+        // Generate file extension based on specific file type
         if(fileOptions.fileType) {
 
             var fileType = fileOptions.fileType;
             if(typeRange.indexOf(fileType) !== -1) {
 
-                fileExtention = this.pickone(this.get(poolCollectionKey)[fileType]);
-                return (fileName + '.' + fileExtention);
+                fileExtension = this.pickone(this.get(poolCollectionKey)[fileType]);
+                return (fileName + '.' + fileExtension);
             }
 
             throw new Error("Expect file type value to be 'raster', 'vector', '3d' or 'document' ");
         }
 
-        // Generate random file name if no extenton options are passed
-        fileExtention = this.pickone(this.get(poolCollectionKey)[this.pickone(typeRange)]);
-        return (fileName + '.' + fileExtention);
+        // Generate random file name if no extension options are passed
+        fileExtension = this.pickone(this.get(poolCollectionKey)[this.pickone(typeRange)]);
+        return (fileName + '.' + fileExtension);
     };
 
     var data = {
@@ -6390,7 +6571,7 @@ function isnan (val) {
                 "it": ["Adolfo", "Alberto", "Aldo", "Alessandro", "Alessio", "Alfredo", "Alvaro", "Andrea", "Angelo", "Angiolo", "Antonino", "Antonio", "Attilio", "Benito", "Bernardo", "Bruno", "Carlo", "Cesare", "Christian", "Claudio", "Corrado", "Cosimo", "Cristian", "Cristiano", "Daniele", "Dario", "David", "Davide", "Diego", "Dino", "Domenico", "Duccio", "Edoardo", "Elia", "Elio", "Emanuele", "Emiliano", "Emilio", "Enrico", "Enzo", "Ettore", "Fabio", "Fabrizio", "Federico", "Ferdinando", "Fernando", "Filippo", "Francesco", "Franco", "Gabriele", "Giacomo", "Giampaolo", "Giampiero", "Giancarlo", "Gianfranco", "Gianluca", "Gianmarco", "Gianni", "Gino", "Giorgio", "Giovanni", "Giuliano", "Giulio", "Giuseppe", "Graziano", "Gregorio", "Guido", "Iacopo", "Jacopo", "Lapo", "Leonardo", "Lorenzo", "Luca", "Luciano", "Luigi", "Manuel", "Marcello", "Marco", "Marino", "Mario", "Massimiliano", "Massimo", "Matteo", "Mattia", "Maurizio", "Mauro", "Michele", "Mirko", "Mohamed", "Nello", "Neri", "Niccolò", "Nicola", "Osvaldo", "Otello", "Paolo", "Pier Luigi", "Piero", "Pietro", "Raffaele", "Remo", "Renato", "Renzo", "Riccardo", "Roberto", "Rolando", "Romano", "Salvatore", "Samuele", "Sandro", "Sergio", "Silvano", "Simone", "Stefano", "Thomas", "Tommaso", "Ubaldo", "Ugo", "Umberto", "Valerio", "Valter", "Vasco", "Vincenzo", "Vittorio"]
             },
             "female": {
-                "en": ["Mary", "Emma", "Elizabeth", "Minnie", "Margaret", "Ida", "Alice", "Bertha", "Sarah", "Annie", "Clara", "Ella", "Florence", "Cora", "Martha", "Laura", "Nellie", "Grace", "Carrie", "Maude", "Mabel", "Bessie", "Jennie", "Gertrude", "Julia", "Hattie", "Edith", "Mattie", "Rose", "Catherine", "Lillian", "Ada", "Lillie", "Helen", "Jessie", "Louise", "Ethel", "Lula", "Myrtle", "Eva", "Frances", "Lena", "Lucy", "Edna", "Maggie", "Pearl", "Daisy", "Fannie", "Josephine", "Dora", "Rosa", "Katherine", "Agnes", "Marie", "Nora", "May", "Mamie", "Blanche", "Stella", "Ellen", "Nancy", "Effie", "Sallie", "Nettie", "Della", "Lizzie", "Flora", "Susie", "Maud", "Mae", "Etta", "Harriet", "Sadie", "Caroline", "Katie", "Lydia", "Elsie", "Kate", "Susan", "Mollie", "Alma", "Addie", "Georgia", "Eliza", "Lulu", "Nannie", "Lottie", "Amanda", "Belle", "Charlotte", "Rebecca", "Ruth", "Viola", "Olive", "Amelia", "Hannah", "Jane", "Virginia", "Emily", "Matilda", "Irene", "Kathryn", "Esther", "Willie", "Henrietta", "Ollie", "Amy", "Rachel", "Sara", "Estella", "Theresa", "Augusta", "Ora", "Pauline", "Josie", "Lola", "Sophia", "Leona", "Anne", "Mildred", "Ann", "Beulah", "Callie", "Lou", "Delia", "Eleanor", "Barbara", "Iva", "Louisa", "Maria", "Mayme", "Evelyn", "Estelle", "Nina", "Betty", "Marion", "Bettie", "Dorothy", "Luella", "Inez", "Lela", "Rosie", "Allie", "Millie", "Janie", "Cornelia", "Victoria", "Ruby", "Winifred", "Alta", "Celia", "Christine", "Beatrice", "Birdie", "Harriett", "Mable", "Myra", "Sophie", "Tillie", "Isabel", "Sylvia", "Carolyn", "Isabelle", "Leila", "Sally", "Ina", "Essie", "Bertie", "Nell", "Alberta", "Katharine", "Lora", "Rena", "Mina", "Rhoda", "Mathilda", "Abbie", "Eula", "Dollie", "Hettie", "Eunice", "Fanny", "Ola", "Lenora", "Adelaide", "Christina", "Lelia", "Nelle", "Sue", "Johanna", "Lilly", "Lucinda", "Minerva", "Lettie", "Roxie", "Cynthia", "Helena", "Hilda", "Hulda", "Bernice", "Genevieve", "Jean", "Cordelia", "Marian", "Francis", "Jeanette", "Adeline", "Gussie", "Leah", "Lois", "Lura", "Mittie", "Hallie", "Isabella", "Olga", "Phoebe", "Teresa", "Hester", "Lida", "Lina", "Winnie", "Claudia", "Marguerite", "Vera", "Cecelia", "Bess", "Emilie", "John", "Rosetta", "Verna", "Myrtie", "Cecilia", "Elva", "Olivia", "Ophelia", "Georgie", "Elnora", "Violet", "Adele", "Lily", "Linnie", "Loretta", "Madge", "Polly", "Virgie", "Eugenia", "Lucile", "Lucille", "Mabelle", "Rosalie"],
+                "en": ["Mary", "Emma", "Elizabeth", "Minnie", "Margaret", "Ida", "Alice", "Bertha", "Sarah", "Annie", "Clara", "Ella", "Florence", "Cora", "Martha", "Laura", "Nellie", "Grace", "Carrie", "Maude", "Mabel", "Bessie", "Jennie", "Gertrude", "Julia", "Hattie", "Edith", "Mattie", "Rose", "Catherine", "Lillian", "Ada", "Lillie", "Helen", "Jessie", "Louise", "Ethel", "Lula", "Myrtle", "Eva", "Frances", "Lena", "Lucy", "Edna", "Maggie", "Pearl", "Daisy", "Fannie", "Josephine", "Dora", "Rosa", "Katherine", "Agnes", "Marie", "Nora", "May", "Mamie", "Blanche", "Stella", "Ellen", "Nancy", "Effie", "Sallie", "Nettie", "Della", "Lizzie", "Flora", "Susie", "Maud", "Mae", "Etta", "Harriet", "Sadie", "Caroline", "Katie", "Lydia", "Elsie", "Kate", "Susan", "Mollie", "Alma", "Addie", "Georgia", "Eliza", "Lulu", "Nannie", "Lottie", "Amanda", "Belle", "Charlotte", "Rebecca", "Ruth", "Viola", "Olive", "Amelia", "Hannah", "Jane", "Virginia", "Emily", "Matilda", "Irene", "Kathryn", "Esther", "Willie", "Henrietta", "Ollie", "Amy", "Rachel", "Sara", "Estella", "Theresa", "Augusta", "Ora", "Pauline", "Josie", "Lola", "Sophia", "Leona", "Anne", "Mildred", "Ann", "Beulah", "Callie", "Lou", "Delia", "Eleanor", "Barbara", "Iva", "Louisa", "Maria", "Mayme", "Evelyn", "Estelle", "Nina", "Betty", "Marion", "Bettie", "Dorothy", "Luella", "Inez", "Lela", "Rosie", "Allie", "Millie", "Janie", "Cornelia", "Victoria", "Ruby", "Winifred", "Alta", "Celia", "Christine", "Beatrice", "Birdie", "Harriett", "Mable", "Myra", "Sophie", "Tillie", "Isabel", "Sylvia", "Carolyn", "Isabelle", "Leila", "Sally", "Ina", "Essie", "Bertie", "Nell", "Alberta", "Katharine", "Lora", "Rena", "Mina", "Rhoda", "Mathilda", "Abbie", "Eula", "Dollie", "Hettie", "Eunice", "Fanny", "Ola", "Lenora", "Adelaide", "Christina", "Lelia", "Nelle", "Sue", "Johanna", "Lilly", "Lucinda", "Minerva", "Lettie", "Roxie", "Cynthia", "Helena", "Hilda", "Hulda", "Bernice", "Genevieve", "Jean", "Cordelia", "Marian", "Francis", "Jeanette", "Adeline", "Gussie", "Leah", "Lois", "Lura", "Mittie", "Hallie", "Isabella", "Olga", "Phoebe", "Teresa", "Hester", "Lida", "Lina", "Winnie", "Claudia", "Marguerite", "Vera", "Cecelia", "Bess", "Emilie", "Rosetta", "Verna", "Myrtie", "Cecilia", "Elva", "Olivia", "Ophelia", "Georgie", "Elnora", "Violet", "Adele", "Lily", "Linnie", "Loretta", "Madge", "Polly", "Virgie", "Eugenia", "Lucile", "Lucille", "Mabelle", "Rosalie"],
                 // Data taken from http://www.dati.gov.it/dataset/comune-di-firenze_0162
                 "it": ["Ada", "Adriana", "Alessandra", "Alessia", "Alice", "Angela", "Anna", "Anna Maria", "Annalisa", "Annita", "Annunziata", "Antonella", "Arianna", "Asia", "Assunta", "Aurora", "Barbara", "Beatrice", "Benedetta", "Bianca", "Bruna", "Camilla", "Carla", "Carlotta", "Carmela", "Carolina", "Caterina", "Catia", "Cecilia", "Chiara", "Cinzia", "Clara", "Claudia", "Costanza", "Cristina", "Daniela", "Debora", "Diletta", "Dina", "Donatella", "Elena", "Eleonora", "Elisa", "Elisabetta", "Emanuela", "Emma", "Eva", "Federica", "Fernanda", "Fiorella", "Fiorenza", "Flora", "Franca", "Francesca", "Gabriella", "Gaia", "Gemma", "Giada", "Gianna", "Gina", "Ginevra", "Giorgia", "Giovanna", "Giulia", "Giuliana", "Giuseppa", "Giuseppina", "Grazia", "Graziella", "Greta", "Ida", "Ilaria", "Ines", "Iolanda", "Irene", "Irma", "Isabella", "Jessica", "Laura", "Leda", "Letizia", "Licia", "Lidia", "Liliana", "Lina", "Linda", "Lisa", "Livia", "Loretta", "Luana", "Lucia", "Luciana", "Lucrezia", "Luisa", "Manuela", "Mara", "Marcella", "Margherita", "Maria", "Maria Cristina", "Maria Grazia", "Maria Luisa", "Maria Pia", "Maria Teresa", "Marina", "Marisa", "Marta", "Martina", "Marzia", "Matilde", "Melissa", "Michela", "Milena", "Mirella", "Monica", "Natalina", "Nella", "Nicoletta", "Noemi", "Olga", "Paola", "Patrizia", "Piera", "Pierina", "Raffaella", "Rebecca", "Renata", "Rina", "Rita", "Roberta", "Rosa", "Rosanna", "Rossana", "Rossella", "Sabrina", "Sandra", "Sara", "Serena", "Silvana", "Silvia", "Simona", "Simonetta", "Sofia", "Sonia", "Stefania", "Susanna", "Teresa", "Tina", "Tiziana", "Tosca", "Valentina", "Valeria", "Vanda", "Vanessa", "Vanna", "Vera", "Veronica", "Vilma", "Viola", "Virginia", "Vittoria"]
             }
@@ -6409,6 +6590,9 @@ function isnan (val) {
             // Data taken from http://www.downloadexcelfiles.com/gb_en/download-excel-file-list-counties-uk
             "uk": [
                 {name: 'Bath and North East Somerset'},
+                {name: 'Aberdeenshire'},
+                {name: 'Anglesey'},
+                {name: 'Angus'},
                 {name: 'Bedford'},
                 {name: 'Blackburn with Darwen'},
                 {name: 'Blackpool'},
@@ -6418,28 +6602,49 @@ function isnan (val) {
                 {name: 'Bristol'},
                 {name: 'Buckinghamshire'},
                 {name: 'Cambridgeshire'},
+                {name: 'Carmarthenshire'},
                 {name: 'Central Bedfordshire'},
+                {name: 'Ceredigion'},
                 {name: 'Cheshire East'},
                 {name: 'Cheshire West and Chester'},
+                {name: 'Clackmannanshire'},
+                {name: 'Conwy'},
                 {name: 'Cornwall'},
+                {name: 'County Antrim'},
+                {name: 'County Armagh'},
+                {name: 'County Down'},
                 {name: 'County Durham'},
+                {name: 'County Fermanagh'},
+                {name: 'County Londonderry'},
+                {name: 'County Tyrone'},
                 {name: 'Cumbria'},
                 {name: 'Darlington'},
+                {name: 'Denbighshire'},
                 {name: 'Derby'},
                 {name: 'Derbyshire'},
                 {name: 'Devon'},
                 {name: 'Dorset'},
+                {name: 'Dumfries and Galloway'},
+                {name: 'Dundee'},
+                {name: 'East Lothian'},
                 {name: 'East Riding of Yorkshire'},
                 {name: 'East Sussex'},
+                {name: 'Edinburgh?'},
                 {name: 'Essex'},
+                {name: 'Falkirk'},
+                {name: 'Fife'},
+                {name: 'Flintshire'},
                 {name: 'Gloucestershire'},
                 {name: 'Greater London'},
                 {name: 'Greater Manchester'},
+                {name: 'Gwent'},
+                {name: 'Gwynedd'},
                 {name: 'Halton'},
                 {name: 'Hampshire'},
                 {name: 'Hartlepool'},
                 {name: 'Herefordshire'},
                 {name: 'Hertfordshire'},
+                {name: 'Highlands'},
                 {name: 'Hull'},
                 {name: 'Isle of Wight'},
                 {name: 'Isles of Scilly'},
@@ -6448,11 +6653,15 @@ function isnan (val) {
                 {name: 'Leicester'},
                 {name: 'Leicestershire'},
                 {name: 'Lincolnshire'},
+                {name: 'Lothian'},
                 {name: 'Luton'},
                 {name: 'Medway'},
                 {name: 'Merseyside'},
+                {name: 'Mid Glamorgan'},
                 {name: 'Middlesbrough'},
                 {name: 'Milton Keynes'},
+                {name: 'Monmouthshire'},
+                {name: 'Moray'},
                 {name: 'Norfolk'},
                 {name: 'North East Lincolnshire'},
                 {name: 'North Lincolnshire'},
@@ -6463,23 +6672,30 @@ function isnan (val) {
                 {name: 'Nottingham'},
                 {name: 'Nottinghamshire'},
                 {name: 'Oxfordshire'},
+                {name: 'Pembrokeshire'},
+                {name: 'Perth and Kinross'},
                 {name: 'Peterborough'},
                 {name: 'Plymouth'},
                 {name: 'Poole'},
                 {name: 'Portsmouth'},
+                {name: 'Powys'},
                 {name: 'Reading'},
                 {name: 'Redcar and Cleveland'},
                 {name: 'Rutland'},
+                {name: 'Scottish Borders'},
                 {name: 'Shropshire'},
                 {name: 'Slough'},
                 {name: 'Somerset'},
+                {name: 'South Glamorgan'},
                 {name: 'South Gloucestershire'},
                 {name: 'South Yorkshire'},
                 {name: 'Southampton'},
                 {name: 'Southend-on-Sea'},
                 {name: 'Staffordshire'},
+                {name: 'Stirlingshire'},
                 {name: 'Stockton-on-Tees'},
                 {name: 'Stoke-on-Trent'},
+                {name: 'Strathclyde'},
                 {name: 'Suffolk'},
                 {name: 'Surrey'},
                 {name: 'Swindon'},
@@ -6490,13 +6706,17 @@ function isnan (val) {
                 {name: 'Warrington'},
                 {name: 'Warwickshire'},
                 {name: 'West Berkshire'},
+                {name: 'West Glamorgan'},
+                {name: 'West Lothian'},
                 {name: 'West Midlands'},
                 {name: 'West Sussex'},
                 {name: 'West Yorkshire'},
+                {name: 'Western Isles'},
                 {name: 'Wiltshire'},
                 {name: 'Windsor and Maidenhead'},
                 {name: 'Wokingham'},
                 {name: 'Worcestershire'},
+                {name: 'Wrexham'},
                 {name: 'York'}]
 				},
         provinces: {
@@ -7032,6 +7252,27 @@ function isnan (val) {
                 { name: 'Viale', abbreviation: 'V.le' },
                 { name: 'Vicinale', abbreviation: 'Vic.le' },
                 { name: 'Vicolo', abbreviation: 'Vic.' }
+            ],
+            'uk' : [
+                {name: 'Avenue', abbreviation: 'Ave'},
+                {name: 'Close', abbreviation: 'Cl'},
+                {name: 'Court', abbreviation: 'Ct'},
+                {name: 'Crescent', abbreviation: 'Cr'},
+                {name: 'Drive', abbreviation: 'Dr'},
+                {name: 'Garden', abbreviation: 'Gdn'},
+                {name: 'Gardens', abbreviation: 'Gdns'},
+                {name: 'Green', abbreviation: 'Gn'},
+                {name: 'Grove', abbreviation: 'Gr'},
+                {name: 'Lane', abbreviation: 'Ln'},
+                {name: 'Mount', abbreviation: 'Mt'},
+                {name: 'Place', abbreviation: 'Pl'},
+                {name: 'Park', abbreviation: 'Pk'},
+                {name: 'Ridge', abbreviation: 'Rdg'},
+                {name: 'Road', abbreviation: 'Rd'},
+                {name: 'Square', abbreviation: 'Sq'},
+                {name: 'Street', abbreviation: 'St'},
+                {name: 'Terrace', abbreviation: 'Ter'},
+                {name: 'Valley', abbreviation: 'Val'}
             ]
         },
 
@@ -8601,7 +8842,399 @@ function isnan (val) {
                       "Pacific/Apia"
                     ]
                   }
-                ]
+                ],
+        //List source: http://answers.google.com/answers/threadview/id/589312.html
+        profession: [
+            "Airline Pilot",
+            "Academic Team",
+            "Accountant",
+            "Account Executive",
+            "Actor",
+            "Actuary",
+            "Acquisition Analyst",
+            "Administrative Asst.",
+            "Administrative Analyst",
+            "Administrator",
+            "Advertising Director",
+            "Aerospace Engineer",
+            "Agent",
+            "Agricultural Inspector",
+            "Agricultural Scientist",
+            "Air Traffic Controller",
+            "Animal Trainer",
+            "Anthropologist",
+            "Appraiser",
+            "Architect",
+            "Art Director",
+            "Artist",
+            "Astronomer",
+            "Athletic Coach",
+            "Auditor",
+            "Author",
+            "Baker",
+            "Banker",
+            "Bankruptcy Attorney",
+            "Benefits Manager",
+            "Biologist",
+            "Bio-feedback Specialist",
+            "Biomedical Engineer",
+            "Biotechnical Researcher",
+            "Broadcaster",
+            "Broker",
+            "Building Manager",
+            "Building Contractor",
+            "Building Inspector",
+            "Business Analyst",
+            "Business Planner",
+            "Business Manager",
+            "Buyer",
+            "Call Center Manager",
+            "Career Counselor",
+            "Cash Manager",
+            "Ceramic Engineer",
+            "Chief Executive Officer",
+            "Chief Operation Officer",
+            "Chef",
+            "Chemical Engineer",
+            "Chemist",
+            "Child Care Manager",
+            "Chief Medical Officer",
+            "Chiropractor",
+            "Cinematographer",
+            "City Housing Manager",
+            "City Manager",
+            "Civil Engineer",
+            "Claims Manager",
+            "Clinical Research Assistant",
+            "Collections Manager.",
+            "Compliance Manager",
+            "Comptroller",
+            "Computer Manager",
+            "Commercial Artist",
+            "Communications Affairs Director",
+            "Communications Director",
+            "Communications Engineer",
+            "Compensation Analyst",
+            "Computer Programmer",
+            "Computer Ops. Manager",
+            "Computer Engineer",
+            "Computer Operator",
+            "Computer Graphics Specialist",
+            "Construction Engineer",
+            "Construction Manager",
+            "Consultant",
+            "Consumer Relations Manager",
+            "Contract Administrator",
+            "Copyright Attorney",
+            "Copywriter",
+            "Corporate Planner",
+            "Corrections Officer",
+            "Cosmetologist",
+            "Credit Analyst",
+            "Cruise Director",
+            "Chief Information Officer",
+            "Chief Technology Officer",
+            "Customer Service Manager",
+            "Cryptologist",
+            "Dancer",
+            "Data Security Manager",
+            "Database Manager",
+            "Day Care Instructor",
+            "Dentist",
+            "Designer",
+            "Design Engineer",
+            "Desktop Publisher",
+            "Developer",
+            "Development Officer",
+            "Diamond Merchant",
+            "Dietitian",
+            "Direct Marketer",
+            "Director",
+            "Distribution Manager",
+            "Diversity Manager",
+            "Economist",
+            "EEO Compliance Manager",
+            "Editor",
+            "Education Adminator",
+            "Electrical Engineer",
+            "Electro Optical Engineer",
+            "Electronics Engineer",
+            "Embassy Management",
+            "Employment Agent",
+            "Engineer Technician",
+            "Entrepreneur",
+            "Environmental Analyst",
+            "Environmental Attorney",
+            "Environmental Engineer",
+            "Environmental Specialist",
+            "Escrow Officer",
+            "Estimator",
+            "Executive Assistant",
+            "Executive Director",
+            "Executive Recruiter",
+            "Facilities Manager",
+            "Family Counselor",
+            "Fashion Events Manager",
+            "Fashion Merchandiser",
+            "Fast Food Manager",
+            "Film Producer",
+            "Film Production Assistant",
+            "Financial Analyst",
+            "Financial Planner",
+            "Financier",
+            "Fine Artist",
+            "Wildlife Specialist",
+            "Fitness Consultant",
+            "Flight Attendant",
+            "Flight Engineer",
+            "Floral Designer",
+            "Food & Beverage Director",
+            "Food Service Manager",
+            "Forestry Technician",
+            "Franchise Management",
+            "Franchise Sales",
+            "Fraud Investigator",
+            "Freelance Writer",
+            "Fund Raiser",
+            "General Manager",
+            "Geologist",
+            "General Counsel",
+            "Geriatric Specialist",
+            "Gerontologist",
+            "Glamour Photographer",
+            "Golf Club Manager",
+            "Gourmet Chef",
+            "Graphic Designer",
+            "Grounds Keeper",
+            "Hazardous Waste Manager",
+            "Health Care Manager",
+            "Health Therapist",
+            "Health Service Administrator",
+            "Hearing Officer",
+            "Home Economist",
+            "Horticulturist",
+            "Hospital Administrator",
+            "Hotel Manager",
+            "Human Resources Manager",
+            "Importer",
+            "Industrial Designer",
+            "Industrial Engineer",
+            "Information Director",
+            "Inside Sales",
+            "Insurance Adjuster",
+            "Interior Decorator",
+            "Internal Controls Director",
+            "International Acct.",
+            "International Courier",
+            "International Lawyer",
+            "Interpreter",
+            "Investigator",
+            "Investment Banker",
+            "Investment Manager",
+            "IT Architect",
+            "IT Project Manager",
+            "IT Systems Analyst",
+            "Jeweler",
+            "Joint Venture Manager",
+            "Journalist",
+            "Labor Negotiator",
+            "Labor Organizer",
+            "Labor Relations Manager",
+            "Lab Services Director",
+            "Lab Technician",
+            "Land Developer",
+            "Landscape Architect",
+            "Law Enforcement Officer",
+            "Lawyer",
+            "Lead Software Engineer",
+            "Lead Software Test Engineer",
+            "Leasing Manager",
+            "Legal Secretary",
+            "Library Manager",
+            "Litigation Attorney",
+            "Loan Officer",
+            "Lobbyist",
+            "Logistics Manager",
+            "Maintenance Manager",
+            "Management Consultant",
+            "Managed Care Director",
+            "Managing Partner",
+            "Manufacturing Director",
+            "Manpower Planner",
+            "Marine Biologist",
+            "Market Res. Analyst",
+            "Marketing Director",
+            "Materials Manager",
+            "Mathematician",
+            "Membership Chairman",
+            "Mechanic",
+            "Mechanical Engineer",
+            "Media Buyer",
+            "Medical Investor",
+            "Medical Secretary",
+            "Medical Technician",
+            "Mental Health Counselor",
+            "Merchandiser",
+            "Metallurgical Engineering",
+            "Meteorologist",
+            "Microbiologist",
+            "MIS Manager",
+            "Motion Picture Director",
+            "Multimedia Director",
+            "Musician",
+            "Network Administrator",
+            "Network Specialist",
+            "Network Operator",
+            "New Product Manager",
+            "Novelist",
+            "Nuclear Engineer",
+            "Nuclear Specialist",
+            "Nutritionist",
+            "Nursing Administrator",
+            "Occupational Therapist",
+            "Oceanographer",
+            "Office Manager",
+            "Operations Manager",
+            "Operations Research Director",
+            "Optical Technician",
+            "Optometrist",
+            "Organizational Development Manager",
+            "Outplacement Specialist",
+            "Paralegal",
+            "Park Ranger",
+            "Patent Attorney",
+            "Payroll Specialist",
+            "Personnel Specialist",
+            "Petroleum Engineer",
+            "Pharmacist",
+            "Photographer",
+            "Physical Therapist",
+            "Physician",
+            "Physician Assistant",
+            "Physicist",
+            "Planning Director",
+            "Podiatrist",
+            "Political Analyst",
+            "Political Scientist",
+            "Politician",
+            "Portfolio Manager",
+            "Preschool Management",
+            "Preschool Teacher",
+            "Principal",
+            "Private Banker",
+            "Private Investigator",
+            "Probation Officer",
+            "Process Engineer",
+            "Producer",
+            "Product Manager",
+            "Product Engineer",
+            "Production Engineer",
+            "Production Planner",
+            "Professional Athlete",
+            "Professional Coach",
+            "Professor",
+            "Project Engineer",
+            "Project Manager",
+            "Program Manager",
+            "Property Manager",
+            "Public Administrator",
+            "Public Safety Director",
+            "PR Specialist",
+            "Publisher",
+            "Purchasing Agent",
+            "Publishing Director",
+            "Quality Assurance Specialist",
+            "Quality Control Engineer",
+            "Quality Control Inspector",
+            "Radiology Manager",
+            "Railroad Engineer",
+            "Real Estate Broker",
+            "Recreational Director",
+            "Recruiter",
+            "Redevelopment Specialist",
+            "Regulatory Affairs Manager",
+            "Registered Nurse",
+            "Rehabilitation Counselor",
+            "Relocation Manager",
+            "Reporter",
+            "Research Specialist",
+            "Restaurant Manager",
+            "Retail Store Manager",
+            "Risk Analyst",
+            "Safety Engineer",
+            "Sales Engineer",
+            "Sales Trainer",
+            "Sales Promotion Manager",
+            "Sales Representative",
+            "Sales Manager",
+            "Service Manager",
+            "Sanitation Engineer",
+            "Scientific Programmer",
+            "Scientific Writer",
+            "Securities Analyst",
+            "Security Consultant",
+            "Security Director",
+            "Seminar Presenter",
+            "Ship's Officer",
+            "Singer",
+            "Social Director",
+            "Social Program Planner",
+            "Social Research",
+            "Social Scientist",
+            "Social Worker",
+            "Sociologist",
+            "Software Developer",
+            "Software Engineer",
+            "Software Test Engineer",
+            "Soil Scientist",
+            "Special Events Manager",
+            "Special Education Teacher",
+            "Special Projects Director",
+            "Speech Pathologist",
+            "Speech Writer",
+            "Sports Event Manager",
+            "Statistician",
+            "Store Manager",
+            "Strategic Alliance Director",
+            "Strategic Planning Director",
+            "Stress Reduction Specialist",
+            "Stockbroker",
+            "Surveyor",
+            "Structural Engineer",
+            "Superintendent",
+            "Supply Chain Director",
+            "System Engineer",
+            "Systems Analyst",
+            "Systems Programmer",
+            "System Administrator",
+            "Tax Specialist",
+            "Teacher",
+            "Technical Support Specialist",
+            "Technical Illustrator",
+            "Technical Writer",
+            "Technology Director",
+            "Telecom Analyst",
+            "Telemarketer",
+            "Theatrical Director",
+            "Title Examiner",
+            "Tour Escort",
+            "Tour Guide Director",
+            "Traffic Manager",
+            "Trainer Translator",
+            "Transportation Manager",
+            "Travel Agent",
+            "Treasurer",
+            "TV Programmer",
+            "Underwriter",
+            "Union Representative",
+            "University Administrator",
+            "University Dean",
+            "Urban Planner",
+            "Veterinarian",
+            "Vendor Relations Director",
+            "Viticulturist",
+            "Warehouse Manager"
+        ]
     };
 
     var o_hasOwnProperty = Object.prototype.hasOwnProperty;
