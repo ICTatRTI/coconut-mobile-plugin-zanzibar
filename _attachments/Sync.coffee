@@ -35,6 +35,7 @@ class Sync extends Backbone.Model
 
     _.delay @backgroundSync, minimumMinutesBetweenSync*60*1000
 
+    Coconut.headerView.toggleSyncIcon(true)
     Coconut.questions.each (question) =>
       Coconut.database.query "results",
         startkey: [question.id,true,@lastSuccessfulSync.format(Coconut.config.get("date_format"))]
@@ -55,7 +56,7 @@ class Sync extends Backbone.Model
               $("div#log").show()
         else
           console.log "No new results for #{question.id} so not syncing"
-  
+    Coconut.headerView.toggleSyncIcon(false)
 
     # Check if there are new results
     # Send results if new results and timeout
@@ -82,7 +83,7 @@ class Sync extends Backbone.Model
             console.error "No internet"
             options?.error?(error)
           success: =>
-            @log "Creating list of all results on the tablet. Please wait."
+            @log "Creating list of all results on the mobile device. Please wait."
             Coconut.database.query "results"
             .catch (error) =>
               console.error error
@@ -100,7 +101,6 @@ class Sync extends Backbone.Model
                 _.pluck result.rows, "id"
 
               @log "Synchronizing #{resultIDs.length} results. Please wait."
-
               Coconut.database.replicate.to Coconut.config.cloud_url_with_credentials(),
                 doc_ids: resultIDs
               .on 'complete', (info) =>
@@ -203,7 +203,7 @@ class Sync extends Backbone.Model
       .catch (error) -> alert "Couldn't find english_to_swahili map: #{JSON.stringify result}"
       .then (result) =>
         district_language_mapping = result.english_to_swahili
-    
+
         @log "Looking for USSD notifications without Case Notifications after #{dateToStartLooking}. Please wait."
 
         Coconut.cloudDatabase.query "rawNotificationsNotConvertedToCaseNotifications",
@@ -235,7 +235,7 @@ class Sync extends Backbone.Model
                 @log "Using district: #{districtForNotification} indicated by health facility."
               else
                 @log "Can't find a valid district for health facility: #{notification.hf}"
-              # Check it again  
+              # Check it again
               unless _(GeoHierarchy.allDistricts()).contains districtForNotification
                 @log "#{districtForNotification} still not valid district, trying to use shehia name to identify district: #{notification.shehia}"
                 if GeoHierarchy.findOneShehia(notification.shehia)?
@@ -270,7 +270,7 @@ class Sync extends Backbone.Model
         .then =>
           @log "Created new case notification #{result.get "MalariaCaseID"} for patient #{result.get "Name"} at #{result.get "FacilityName"}"
           doc_ids = [result.get("_id"), notification._id ]
-          # Sync results back to the 
+          # Sync results back to the server
           Coconut.database.replicate.to(Coconut.cloudDatabase, {doc_ids: doc_ids})
           .catch (error) =>
             @log "Error replicating #{doc_ids} back to server: #{JSON.stringify error}"
