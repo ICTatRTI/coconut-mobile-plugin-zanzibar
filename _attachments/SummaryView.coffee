@@ -79,7 +79,7 @@ class SummaryView extends Backbone.View
             result = "
               <tr>
                 <td>#{row.key}</td>
-                <td><a class='button' href='#edit/result/#{row.id}'>#{row.value[0]}</a></td>
+                <td><a class='button' href='##{Coconut.databaseName}/edit/result/#{row.id}'>#{row.value[0]}</a></td>
                 <td>#{row.value[1]}</td>
                 <td>#{row.value[2] || "false"}</td>
                 <td><small>

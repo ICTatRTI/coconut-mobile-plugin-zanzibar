@@ -42,15 +42,13 @@ onStartup = ->
       Coconut.router.route ":database/transfer/:caseID", (caseID) ->
         if Coconut.currentUser
           $("#content").html "
-            <h2>
-            Select a user to transfer #{caseID} to:
-            </h2>
+            <h3 class='content_title'>Select a user to transfer #{caseID} to:</h3>
             <select id='users'>
               <option></option>
             </select>
             <br/>
             <button onClick='window.history.back()'>Cancel</button>
-            <h3>Case Results to be transferred</h3>
+            <h4>Case Results to be transferred</h4>
             <div id='caseinfo'></div>
           "
           caseResults = []
