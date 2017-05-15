@@ -4,21 +4,13 @@ class SummaryView extends Backbone.View
   render: (result) =>
     @$el.html "
       <style>
-        table#summary td{
-          border: solid black 1px;
-        }
-        table#summary tr.even{
-          background-color: #CFC;
-        }
-        table#summary tr.odd{
-          background-color: #FFFFB2;
+        th.header {
+          text-align: left;
         }
 
-        table.results th.header, table.results td{
-          font-size:150%;
-        }
-        .dataTables_wrapper .dataTables_length{
-          display: none;
+        table, table.dataTable {
+          width: 100%;
+          margin: 0;
         }
 
         .dataTables_filter input{
@@ -65,46 +57,54 @@ class SummaryView extends Backbone.View
           margin-bottom:20px;
         }
 
-
+        table.dataTable thead .sorting, table.dataTable thead .sorting_asc, table.dataTable thead .sorting_desc, table.dataTable thead .sorting_asc_disabled, table.dataTable thead .sorting_desc_disabled {
+          background-position: center left;
+        }
 
       </style>
-      Cases on this tablet:
+      <h3 class='content_title'>Cases on this tablet:</h3>
+
       <table id='summary'>
-      <thead>
-      <td>Date</td>
-      <td>ID</td>
-      <td>Type</td>
-      <td>Complete</td>
-      <td>Transfer</td>
-      <td>Options</td>
-      </thead>
-      <tbody>
-      #{
-        _.map result.rows, (row) ->
-          console.log row
-          result = "
-            <tr>
-              <td>#{row.key}</td>
-              <td><a class='button' href='#edit/result/#{row.id}'>#{row.value[0]}</a></td>
-              <td>#{row.value[1]}</td>
-              <td>#{row.value[2] || "false"}</td>
-              <td><small>
-                <pre>
-                #{
-                  if row.value[3]? then JSON.stringify(row.value[3],null,2).replace(/({\n|\n}|\")/g,"") else ""
-                }
-                </pre></small></td>
-              <td> <a class='button' style='text-decoration:none' href='#zanzibar/transfer/#{row.value[0]}'>Transfer</a></td>
-            </tr>
-          "
-        .join ""
-      }
-      </tbody>
+        <thead><tr>
+          <th class='header'>Date</th>
+          <th class='header'>ID</th>
+          <th class='header'>Type</th>
+          <th class='header'>Complete</th>
+          <th class='header'>Transfer</th>
+          <th class='header'>Options</th>
+        </tr></thead>
+        <tbody>
+        #{
+          _.map result.rows, (row) ->
+            result = "
+              <tr>
+                <td>#{row.key}</td>
+                <td><a class='button' href='#edit/result/#{row.id}'>#{row.value[0]}</a></td>
+                <td>#{row.value[1]}</td>
+                <td>#{row.value[2] || "false"}</td>
+                <td><small>
+                  <pre>
+                  #{
+                    if row.value[3]? then JSON.stringify(row.value[3],null,2).replace(/({\n|\n}|\")/g,"") else ""
+                  }
+                  </pre></small></td>
+                <td> <a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{row.value[0]}' title='Transfer'></a></td>
+              </tr>
+            "
+          .join ""
+        }
+        </tbody>
+      </table>
 
     "
-    $("table").dataTable
+    $("table#summary").DataTable
       aaSorting: [[0,"desc"]]
+      scrollX: true
+      lengthMenu: [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ]
+      dom: '<lf<t>ip>'
       iDisplayLength: 25
-#    $("table td").css("border", "solid black 1px")
+      drawCallback: () ->
+        $(".dataTables_scrollHeadInner").css("width":"100%")
+        $(".dataTable.no-footer").css("width":"100%")
 
 module.exports = SummaryView
