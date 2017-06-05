@@ -185,7 +185,7 @@ class Sync extends Backbone.Model
             options.error?(error)
 
   getNewNotifications: (options) ->
-    @log "Looking for most recent Case Notification on tablet. Please wait."
+    @log "Looking for most recent Case Notification on device. Please wait."
     Coconut.database.query "rawNotificationsConvertedToCaseNotifications",
       descending: true
       include_docs: true
@@ -320,9 +320,9 @@ class Sync extends Backbone.Model
             resultDoc.transferred[resultDoc.transferred.length - 1].received = true
             Coconut.database.put resultDoc
             .catch (error) =>
-              @log "ERROR: #{caseId}: #{resultDoc.question or "Notification"} could not be saved on tablet: #{JSON.stringify error}"
+              @log "ERROR: #{caseId}: #{resultDoc.question or "Notification"} could not be saved on device: #{JSON.stringify error}"
             .then (result) =>
-              @log "#{caseId}: #{resultDoc.question or "Notification"} saved on tablet"
+              @log "#{caseId}: #{resultDoc.question or "Notification"} saved on device"
 
               Coconut.database.replicate.to(Coconut.cloudDatabase, doc_ids: [resultDoc._id])
               .catch (error) =>
