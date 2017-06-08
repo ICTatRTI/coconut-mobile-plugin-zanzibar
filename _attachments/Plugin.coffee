@@ -5,6 +5,7 @@ GeoHierarchyClass = require './GeoHierarchy'
 global.Case = require './Case'
 global.HouseholdLocationSelectorView = require './HouseholdLocationSelectorView'
 global.SummaryView = require './SummaryView'
+global.TransferView = require './TransferView'
 Sync = require './Sync'
 
 
@@ -44,92 +45,8 @@ onStartup = ->
 
         Coconut.router.route ":database/transfer/:caseID", (caseID) ->
           if Coconut.currentUser
-            $("#content").html "
-              <style>
-                th.header { text-align: left;}
-                table.dataTable tbody td { padding: 8px 20px;}
-              </style>
-              <h3 class='content_title'>Select a user to transfer #{caseID} to:</h3>
-              <select id='users'>
-                <option></option>
-              </select>
-              <br/>
-              <button onClick='window.history.back()'>Cancel</button>
-              <br />
-              <h4>Case Results to be transferred:</h4>
-            "
-            caseResults = []
-
-            Coconut.database.query "cases",
-              key: caseID
-              include_docs: true
-            ,
-              (error, result) =>
-                console.error error if error
-
-                caseResults = _.pluck(result.rows, "doc")
-                console.log(caseResults)
-                Coconut.database.query "usersByDistrict", {},
-                  (error,result) ->
-                    $("#content select").append(_(result.rows).map (user) ->
-                      return "" unless user.key?
-                      "<option id='#{user.id}'>#{user.key}   #{user.value.join("   ")}</option>"
-                    .join "")
-                $("#content").append "
-                  <div>
-                    <table id='summary' class='tablesorter hover'>
-                      <thead><tr>
-                        <th class='header'>Case ID</th>
-                        <th class='header'>Question</th>
-                        <th class='header'>Complete?</th>
-                      </tr></thead>
-                      <tbody>
-                        #{
-                          _(caseResults).map (caseResult) ->
-                            completed = if caseResult.complete == true then 'Yes' else 'No'
-                            console.log(completed)
-                            result = "
-                              <tr>
-                                <td>#{caseResult.MalariaCaseID}</td>
-                                <td>#{caseResult.question}</td>
-                                <td>#{completed}</td>
-                              </tr>
-                            "
-                          .join ""
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                "
-                $("table#summary").DataTable
-                  aaSorting: [[0,"desc"]]
-                  scrollX: true
-                  searching: false
-                  paging: false
-                  info: false
-                  drawCallback: () ->
-                    $(".dataTables_scrollHeadInner").css("width":"100%")
-                    $(".dataTable.no-footer").css("width":"100%")
-
-            $("select").change ->
-              user = $('select').find(":selected").text()
-              if confirm "Are you sure you want to transfer Case:#{caseID} to #{user}?"
-                _(caseResults).each (caseResult) ->
-                  Coconut.debug "Marking #{caseResult._id} as transferred"
-                  caseResult.transferred = [] unless caseResult.transferred?
-                  caseResult.transferred.push {
-                    from: Coconut.currentUser.get("_id")
-                    to: $('select').find(":selected").attr "id"
-                    time: moment().format("YYYY-MM-DD HH:mm")
-                    notifiedViaSms: []
-                    received: false
-                  }
-                Coconut.cloudDatabase.bulkDocs {docs: caseResults}
-                .catch (error) ->
-                  console.error "Could not save #{JSON.stringify caseResults}:"
-                  console.error error
-                .then () ->
-                  Coconut.router.navigate("",true)
+            Coconut.transferView ?= new TransferView({caseID: caseID})
+            Coconut.transferView.render()
 
   catch error
     console.error "PLUGIN ERROR:"
