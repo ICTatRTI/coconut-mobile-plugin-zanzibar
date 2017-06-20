@@ -65,7 +65,7 @@ class TransferView extends Backbone.View
           <select class='mdl-select__input' id='users' name='users'>
             <option></option>
           </select>
-          <label class='mdl-select__label' for=users'>User</label>
+          <label class='mdl-select__label' for=users'>Select User</label>
         </div>
         <div>
          <button class='mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect' id='cancel_button'>Cancel</button> &nbsp;

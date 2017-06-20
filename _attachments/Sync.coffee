@@ -1,3 +1,5 @@
+Dialog = require './js-libraries/modal-dialog'
+
 class Sync extends Backbone.Model
   initialize: ->
     @set
@@ -69,6 +71,13 @@ class Sync extends Backbone.Model
       options.error()
       @save
         last_send_error: true
+      Dialog.showDialog
+        title: "Connection Problem",
+        text: "#{Coconut.config.cloud_url()} is not reachable. Please ensure that you have internet connection before retrying."
+        neutral:
+          title: "Close",
+          onClick: (e) ->
+            document.location.reload()
     .then (result) =>
         @log "#{Coconut.config.cloud_url()} is reachable, so internet is available."
         options.success()
