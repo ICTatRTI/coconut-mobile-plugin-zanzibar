@@ -63,34 +63,20 @@ class Sync extends Backbone.Model
     # Check if there are new results
     # Send results if new results and timeout
 
-  checkForInternet: (options) =>
-    @log "Checking for internet. (Is #{Coconut.config.cloud_url()} is reachable?) Please wait."
-    Coconut.cloudDatabase.info()
-    .catch (error) =>
-      @log "ERROR! #{Coconut.config.cloud_url()} is not reachable. Do you have enough airtime? Are you on WIFI?  Either the internet is not working or the site is down: #{JSON.stringify(error)}"
-      options.error()
-      @save
-        last_send_error: true
-      Dialog.showDialog
-        title: "Connection Problem",
-        text: "#{Coconut.config.cloud_url()} is not reachable. Please ensure that you have internet connection before retrying."
-        neutral:
-          title: "Close",
-          onClick: (e) ->
-            document.location.reload()
-    .then (result) =>
-        @log "#{Coconut.config.cloud_url()} is reachable, so internet is available."
-        options.success()
-
   sendToCloud: (options) =>
     $("#status").html "Sending data..."
+    self = @
     @fetch
-      error: (error) => @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
+      error: (error) =>
+        @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
+        options?.error?(error)
       success: =>
-        @checkForInternet
+        Coconut.checkForInternet
           error: (error) ->
-            console.error "No internet"
+            self.save
+              last_send_error: true
             options?.error?(error)
+            Coconut.noInternet()
           success: =>
             @log "Creating list of all results on the mobile device. Please wait."
             Coconut.database.query "results"
@@ -131,12 +117,18 @@ class Sync extends Backbone.Model
   getFromCloud: (options) =>
     console.debug options
     $("#status").html "Getting data..."
+    self = @
     @fetch
-      error: (error) => @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
+      error: (error) =>
+        @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
+        options?.error?(error)
       success: =>
-        @checkForInternet
+        Coconut.checkForInternet
           error: ->
-            options.error?(error)
+            self.save
+              last_send_error: true
+            options?.error?(error)
+            Coconut.noInternet()
           success: =>
             @fetch
               success: =>
@@ -167,8 +159,10 @@ class Sync extends Backbone.Model
 
 
   replicateApplicationDocs: (options) =>
-    @checkForInternet
-      error: (error) -> options?.error?(error)
+    Coconut.checkForInternet
+      error: (error) ->
+        options?.error?(error)
+        Coconut.noInternet()
       success: =>
         @log "Getting list of application documents to replicate"
         # Updating design_doc, users & forms
