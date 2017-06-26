@@ -152,6 +152,8 @@ class Sync extends Backbone.Model
                         options?.error?(error)
                       success: =>
                         @transferCasesIn
+                          error: (error) =>
+                            @log error
                           success: =>
                             @fetch
                               error: (error) => @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
@@ -161,9 +163,9 @@ class Sync extends Backbone.Model
                                   last_get_time: new Date().getTime()
                                 console.debug options
                                 options?.success?()
-                                _.delay ->
-                                  document.location.reload()
-                                , 5000
+                                # _.delay ->
+                                #   #document.location.reload()
+                                # , 5000
 
 
   replicateApplicationDocs: (options) =>
