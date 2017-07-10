@@ -120,6 +120,7 @@ class TransferView extends Backbone.View
           scrollX: true
           searching: false
           paging: false
+          retrieve: true
           info: false
           drawCallback: () ->
             $(".dataTables_scrollHeadInner").css("width":"100%")

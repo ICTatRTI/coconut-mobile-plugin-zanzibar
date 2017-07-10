@@ -98,6 +98,7 @@ class SummaryView extends Backbone.View
 
     "
     $("table#summary").DataTable
+      retrieve: true
       aaSorting: [[0,"desc"]]
       scrollX: true
       lengthMenu: [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ]
