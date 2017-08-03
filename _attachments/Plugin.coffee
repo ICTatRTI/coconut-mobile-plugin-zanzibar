@@ -12,6 +12,7 @@ Sync = require './Sync'
 onStartup = ->
 
   try
+    require './HeaderViewPlugins'
     dhisHierarchy = new DHISHierarchy()
     dhisHierarchy.loadExtendExport
       dhisDocumentName: "dhis2" # This is the document that was exported from DHIS2
@@ -26,9 +27,13 @@ onStartup = ->
         Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials())
 
         # Replacing defaults
-        # Router::default = =>
-        #   console.log('Inside plugin default')
-        #   Coconut.router.navigate("##{Coconut.databaseName}/summary",true)
+        Router::default = =>
+          Backbone.history.loadUrl()
+          Coconut.router.navigate "##{Coconut.databaseName}/summary",trigger: true
+
+        if(Backbone.history)
+          Backbone.history == null
+        Coconut.router._bindRoutes()
 
         Coconut.router.route ":database/summary", ->
           Coconut.summaryView ?= new SummaryView()
@@ -47,6 +52,8 @@ onStartup = ->
           if Coconut.currentUser
             Coconut.transferView ?= new TransferView({caseID: caseID})
             Coconut.transferView.render()
+
+#        Backbone.history.loadUrl()
 
   catch error
     console.error "PLUGIN ERROR:"
