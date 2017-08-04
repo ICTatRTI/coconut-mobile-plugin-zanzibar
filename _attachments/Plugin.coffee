@@ -14,7 +14,8 @@ onStartup = ->
   try
     require './RouterPlugins'
     require './HeaderViewPlugins'
-
+    require './MenuViewPlugins'
+    
     dhisHierarchy = new DHISHierarchy()
     dhisHierarchy.loadExtendExport
       dhisDocumentName: "dhis2" # This is the document that was exported from DHIS2
