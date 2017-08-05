@@ -17,8 +17,6 @@ MenuView::questionLinks = (option) ->
       .join(" "))
 
       componentHandler.upgradeDom()
-      @hideMenuOptions()
-      Coconut.headerView.update()
 
 MenuView::generalMenu = ->
   $("#drawer_general_menu").html (
@@ -33,14 +31,14 @@ MenuView::generalMenu = ->
     .join("")
   )
 
-MenuView::update = ->
-  Coconut.questions.each (question,index) =>
-
-  Coconut.database.query "results",
-    startkey: [question.id, true]
-    endkey: [question.id, true, {}]
-    include_docs: false
-    (error,result) =>
-      console.log error if error
-
-      $("#complete_results").html result.rows.length
+# MenuView::update = ->
+#   Coconut.questions.each (question,index) =>
+#
+#   Coconut.database.query "results",
+#     startkey: [question.id, true]
+#     endkey: [question.id, true, {}]
+#     include_docs: false
+#     (error,result) =>
+#       console.log error if error
+#
+#       $("#complete_results").html result.rows.length

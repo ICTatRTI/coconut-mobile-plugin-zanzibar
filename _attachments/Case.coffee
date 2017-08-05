@@ -75,7 +75,7 @@ class Case
             # Duplicate
             if this[resultDoc.question].complete is "true" and (resultDoc.complete isnt "true")
               console.log "Using the result marked as complete"
-              return #  Use the version already loaded which is marked as complete 
+              return #  Use the version already loaded which is marked as complete
             else if this[resultDoc.question].complete and resultDoc.complete
               console.warn "Duplicate complete entries for case: #{@caseID}"
           this[resultDoc.question] = resultDoc
@@ -87,7 +87,7 @@ class Case
           throw "Inconsistent Case ID. Working on #{@caseID} but current doc has #{resultDoc["caseid"]}: #{JSON.stringify resultDoc}"
         @questions.push "USSD Notification"
         this["USSD Notification"] = resultDoc
-    
+
 
   fetch: (options) =>
     unless @caseID
@@ -108,7 +108,7 @@ class Case
     return returnVal
 
   deIdentify: (result) ->
-    
+
   flatten: (questions = @questions) ->
     returnVal = {}
     _.each questions, (question) =>
@@ -137,7 +137,7 @@ class Case
 
   user: ->
     userId = @.Household?.user || @.Facility?.user || @["Case Notification"]?.user
-  
+
   facility: ->
     @["USSD Notification"]?.hf or @["Case Notification"]?.FacilityName
 
@@ -192,7 +192,7 @@ class Case
 
   possibleQuestions: ->
     ["Case Notification", "Facility","Household","Household Members"]
-  
+
   questionStatus: =>
     result = {}
     _.each @possibleQuestions(), (question) =>
@@ -203,7 +203,7 @@ class Case
       else
         result[question] = (@[question]?.complete is "true")
     return result
-      
+
   complete: =>
     @questionStatus()["Household Members"] is true
 
@@ -259,7 +259,7 @@ class Case
   completeNeighborHouseholdMembers: =>
     _(@["Household Members"]).filter (householdMember) =>
       householdMember.HeadofHouseholdName isnt @["Household"].HeadofHouseholdName and householdMember.complete is "true"
-  
+
   hasCompleteNeighborHouseholdMembers: =>
     @completeIndexCaseHouseholdMembers().length > 0
 
@@ -287,7 +287,7 @@ class Case
       @positiveCasesAtIndexHouseholdAndNeighborHouseholds().concat(_.extend @["Facility"], @["Household"])
     else if @["USSD Notification"]
       @positiveCasesAtIndexHouseholdAndNeighborHouseholds().concat(_.extend @["USSD Notification"], @["Household"], {MalariaCaseID: @MalariaCaseID()})
-      
+
   indexCasePatientName: ->
     if @["Facility"]?.complete is "true"
       return "#{@["Facility"].FirstName} #{@["Facility"].LastName}"
@@ -310,7 +310,7 @@ class Case
     returnVal = []
     _.each @["Household Members"]?, (member) ->
       returnVal.push member.lastModifiedAt if member.MalariaTestResult is "PF" or member.MalariaTestResult is "Mixed"
-  
+
   resultsAsArray: =>
     _.chain @possibleQuestions()
     .map (question) =>
@@ -361,7 +361,7 @@ class Case
     issues.push "Missing case notification" unless @["Case Notification"]? or @["Case Notification"]?.length is 0
 
     return issues
-  
+
 
   allResultsByQuestion: ->
     returnVal = {}
@@ -395,7 +395,7 @@ class Case
 
     if dateOfPositiveResults? and notificationDate?
       Math.abs(moment(dateOfPositiveResults).diff(notificationDate, 'days'))
-    
+
 
   timeFacilityNotified: =>
     if @["USSD Notification"]?
@@ -500,7 +500,7 @@ class Case
       @[result.question] = result
       console.debug @
       console.debug window.malariaCase
-      Coconut.menuView.update()
+#      Coconut.menuView.update()
     .catch (error) ->
       console.error error
 
