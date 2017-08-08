@@ -491,7 +491,7 @@ class Case
       console.error @
       return
     console.debug result
-
+    resultQuestion = result.question
     Coconut.database.post result
     .then (result) =>
       console.log "saved"
@@ -500,7 +500,8 @@ class Case
       @[result.question] = result
       console.debug @
       console.debug window.malariaCase
-#      Coconut.menuView.update()
+      Coconut.headerView.update()
+      Coconut.showNotification( "#{resultQuestion} record created")
     .catch (error) ->
       console.error error
 
@@ -551,7 +552,6 @@ class Case
     unless _(@questions).contains 'Household Members'
       # -1 because we don't need information for index case
       _(@Household.TotalNumberofResidentsintheHousehold-1).times =>
-
         result = {
           question: "Household Members"
           MalariaCaseID: @caseID
@@ -566,9 +566,11 @@ class Case
           @questions.push result.question
           @[result.question] = [] unless @[result.questin]
           @[result.question].push result
-          Coconut.menuView.update()
         .catch (error) ->
           console.error error
+
+      Coconut.headerView.update()
+      Coconut.showNotification( "Household member record(s) created")
 
   createNeighborHouseholds: =>
     # If there is more than one Household for this case, then Neighbor households must already have been created
@@ -589,9 +591,11 @@ class Case
 
         Coconut.database.post result
         .then =>
-          Coconut.menuView.update()
+          Coconut.headerView.update()
         .catch (error) ->
           console.error error
+
+      Coconut.showNotification( "Neighbor Household created")
 
 Case.loadSpreadsheetHeader = (options) ->
   if Coconut.spreadsheetHeader
