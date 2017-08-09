@@ -564,7 +564,7 @@ class Case
         Coconut.database.post result
         .then =>
           @questions.push result.question
-          @[result.question] = [] unless @[result.questin]
+          @[result.question] = [] unless @[result.question]
           @[result.question].push result
         .catch (error) ->
           console.error error
