@@ -4,8 +4,6 @@ Router::default = =>
   Backbone.history.loadUrl()
   Coconut.router.navigate "##{Coconut.databaseName}/summary",trigger: true
 
-if(Backbone.history)
-  Backbone.history == null
 Coconut.router._bindRoutes()
 
 Coconut.router.route ":database/summary", ->
@@ -25,4 +23,3 @@ Coconut.router.route ":database/transfer/:caseID", (caseID) ->
   if Coconut.currentUser
     Coconut.transferView ?= new TransferView({caseID: caseID})
     Coconut.transferView.render()
-    
