@@ -62,7 +62,7 @@ class TransferView extends Backbone.View
       <div style='padding-bottom: 20px;'>
         <h3 class='content_title'>Transfer this case to:</h3>
         <div class='mdl-select mdl-js-select mdl-select--floating-label'>
-          <select class='mdl-select__input' id='users' name='users'>
+          <select class='mdl-select__input users' id='users' name='users'>
             <option></option>
           </select>
           <label class='mdl-select__label' for=users'>Select User</label>
@@ -91,7 +91,7 @@ class TransferView extends Backbone.View
       (error,result) ->
         $("#content select").append(_(result.rows).map (user) ->
           return "" unless user.key?
-          "<option id='#{user.id}'>#{user.key}   #{user.value.join('   ')}</option>"
+          "<option id='#{user.id}'>#{user.key} - #{user.value.join(' -  ')}</option>"
         .join ""
         )
 
