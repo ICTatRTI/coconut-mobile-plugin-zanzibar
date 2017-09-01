@@ -34,20 +34,24 @@ class TransferView extends Backbone.View
         notifiedViaSms: []
         received: false
       }
-    Coconut.cloudDatabase.bulkDocs {docs: caseResults}
+    Coconut.database.bulkDocs {docs: caseResults}
     .catch (error) ->
       console.error "Could not save #{JSON.stringify caseResults}:"
       console.error error
     .then () ->
-      Dialog.showDialog
-        title: "CASE TRANSFER",
-        text: "Case #{caseID} has been successfully transferred to #{user}"
-        neutral:
-          title: "Continue"
-          onClick: (e) ->
-            dialog = $('#orrsDiag')
-            Dialog.hideDialog dialog, () ->
-              Coconut.router.navigate("##{Coconut.databaseName}", true)
+      Coconut.syncView.sync.sendToCloud
+        error: =>
+          console.log "Sync failed, so transfers will be delayed until next sync."
+        success: =>
+          Dialog.showDialog
+            title: "CASE TRANSFER",
+            text: "Case #{caseID} has been successfully transferred to #{user}"
+            neutral:
+              title: "Continue"
+              onClick: (e) ->
+                dialog = $('#orrsDiag')
+                Dialog.hideDialog dialog, () ->
+                  Coconut.router.navigate("##{Coconut.databaseName}", true)
 
   render: =>
     @$el.html "
