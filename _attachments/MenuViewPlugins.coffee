@@ -22,7 +22,6 @@ MenuView::generalMenu = ->
   $("#drawer_general_menu").html (
     _([
       "##{Coconut.databaseName}/sync,sync,Sync data"
-      "##{Coconut.databaseName}/reset/database,alert,Reset database"
       "##{Coconut.databaseName}/manage,wrench,Manage"
       "##{Coconut.databaseName}/logout,logout,Logout"
     ]).map (linkData) ->
