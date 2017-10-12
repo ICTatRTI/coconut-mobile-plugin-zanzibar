@@ -62,7 +62,7 @@ class SummaryView extends Backbone.View
         }
 
       </style>
-      <h3 class='content_title'>Cases on this device:</h3>
+      <h4 class='content_title'>Cases on this device:</h4>
 
       <table id='summary' class='tablesorter hover'>
         <thead><tr>
