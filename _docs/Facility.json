@@ -1,0 +1,196 @@
+{
+  "_id": "Facility",
+  "_rev": "483-6b8f75a9ee9363b6be196139b815fbaa",
+  "collection": "question",
+  "couchapp": {},
+  "id": "Facility",
+  "isApplicationDoc": true,
+  "questions": [
+    {
+      "_id": "81",
+      "autocomplete-options": "window.FacilityOptions = FacilityHierarchy.allFacilities()",
+      "id": "81",
+      "label": "Facility Name",
+      "repeatable": "false",
+      "type": "autocomplete from code",
+      "validation": "($('#81').val(); return 'Facility Name ' + value + ' is not valid. Please try again.') unless _.contains(window.FacilityOptions, value)"
+    },
+    {
+      "_id": "311",
+      "id": "311",
+      "label": "Malaria Case ID",
+      "repeatable": "false",
+      "type": "text"
+    },
+    {
+      "_id": "558",
+      "id": "558",
+      "label": "Date of Positive Results",
+      "repeatable": "false",
+      "type": "date",
+      "validation": "return 'Date of Positive Results must be on or before today' if moment(value) > moment()"
+    },
+    {
+      "_id": "632",
+      "id": "632",
+      "label": "Parasite Species",
+      "radio-options": "PF,NF,Unknown,Not Applicable",
+      "repeatable": "false",
+      "type": "radio"
+    },
+    {
+      "_id": "202",
+      "id": "202",
+      "label": "Reference # in OPD Register",
+      "repeatable": "false",
+      "type": "number"
+    },
+    {
+      "_id": "623",
+      "id": "623",
+      "label": "First Name",
+      "repeatable": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "366",
+      "id": "366",
+      "label": "Middle Name",
+      "repeatable": "false",
+      "required": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "310",
+      "id": "310",
+      "label": "Last Name",
+      "repeatable": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "46",
+      "id": "46",
+      "label": "Age",
+      "repeatable": "false",
+      "type": "number",
+      "validation": "return 'Age must be between 0 and 200' if value < 0 or value > 200"
+    },
+    {
+      "_id": "92",
+      "id": "92",
+      "label": "Age in Months or Years",
+      "radio-options": "Years, Months,Unknown,Not Applicable",
+      "repeatable": "false",
+      "type": "radio"
+    },
+    {
+      "_id": "214",
+      "id": "214",
+      "label": "Sex",
+      "radio-options": "Male,Female,Unknown,Not Applicable",
+      "repeatable": "false",
+      "type": "radio"
+    },
+    {
+      "_id": "798",
+      "autocomplete-options": "window.ShehiaOptions = GeoHierarchy.allUniqueShehiaNames()",
+      "id": "798",
+      "label": "Shehia",
+      "repeatable": "false",
+      "type": "autocomplete from code",
+      "validation": "($('#798').val('');return 'Shehia ' + value + ' is not valid. Please try again.' ) unless _.contains(window.ShehiaOptions, value)"
+    },
+    {
+      "_id": "334",
+      "id": "334",
+      "label": "Village",
+      "repeatable": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "907",
+      "id": "907",
+      "label": "Sheha/Mjumbe",
+      "repeatable": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "720",
+      "id": "720",
+      "label": "Head of Household Name",
+      "repeatable": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "363",
+      "id": "363",
+      "label": "Contact Mobile # (patient/relative)",
+      "repeatable": "false",
+      "type": "text"
+    },
+    {
+      "_id": "302",
+      "id": "302",
+      "label": "Treatment Given",
+      "repeatable": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "153",
+      "id": "153",
+      "label": "Travelled Overnight in past month",
+      "radio-options": "No, Yes within Zanzibar, Yes outside Zanzibar, Yes within and outside Zanzibar, Not Applicable",
+      "repeatable": "false",
+      "type": "radio"
+    },
+    {
+      "_id": "573",
+      "id": "573",
+      "label": "If YES, list ALL places travelled",
+      "repeatable": "false",
+      "required": "false",
+      "skip_logic": "ResultOfQuestion('TravelledOvernightinpastmonth').indexOf('No') >= 0 if ResultOfQuestion('TravelledOvernightinpastmonth')?",
+      "type": "text"
+    },
+    {
+      "_id": "2573",
+      "id": "2573",
+      "label": "Has someone from the same household recently tested positive at a health facility",
+      "radio-options": "Yes, No",
+      "repeatable": "false",
+      "required": "true",
+      "skip_logic": "",
+      "type": "radio"
+    },
+    {
+      "_id": "311",
+      "id": "311",
+      "label": "Case ID for other household member that tested positive at a health facility",
+      "repeatable": "false",
+      "required": "false",
+      "skip_logic": "ResultOfQuestion('Hassomeonefromthesamehouseholdrecentlytestedpositiveatahealthfacility').indexOf('No') >= 0 if ResultOfQuestion('Hassomeonefromthesamehouseholdrecentlytestedpositiveatahealthfacility')?",
+      "type": "text"
+    },
+    {
+      "_id": "566",
+      "id": "566",
+      "label": "Comment/Remarks",
+      "repeatable": "false",
+      "required": "false",
+      "type": "autocomplete from previous entries"
+    },
+    {
+      "_id": "341",
+      "id": "341",
+      "label": "complete",
+      "repeatable": "false",
+      "type": "checkbox"
+    }
+  ],
+  "resultSummaryFields": {
+    "Facility Name": "on",
+    "Head of Household Name": "on",
+    "Malaria Case ID": "on",
+    "Shehia": "on"
+  }
+}
