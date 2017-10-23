@@ -746,12 +746,14 @@ Case = (function() {
   };
 
   Case.prototype.saveAndAddResultToCase = function(result) {
+    var resultQuestion;
     if (this[result.question] != null) {
       console.error(result.question + " already exists for:");
       console.error(this);
       return;
     }
     console.debug(result);
+    resultQuestion = result.question;
     return Coconut.database.post(result).then((function(_this) {
       return function(result) {
         console.log("saved");
@@ -760,7 +762,8 @@ Case = (function() {
         _this[result.question] = result;
         console.debug(_this);
         console.debug(window.malariaCase);
-        return Coconut.menuView.update();
+        Coconut.headerView.update();
+        return Coconut.showNotification(resultQuestion + " record created");
       };
     })(this))["catch"](function(error) {
       return console.error(error);
@@ -824,7 +827,7 @@ Case = (function() {
 
   Case.prototype.createHouseholdMembers = function() {
     if (!_(this.questions).contains('Household Members')) {
-      return _(this.Household.TotalNumberofResidentsintheHousehold - 1).times((function(_this) {
+      _(this.Household.TotalNumberofResidentsintheHousehold - 1).times((function(_this) {
         return function() {
           var result;
           result = {
@@ -837,16 +840,17 @@ Case = (function() {
           };
           return Coconut.database.post(result).then(function() {
             _this.questions.push(result.question);
-            if (!_this[result.questin]) {
+            if (!_this[result.question]) {
               _this[result.question] = [];
             }
-            _this[result.question].push(result);
-            return Coconut.menuView.update();
+            return _this[result.question].push(result);
           })["catch"](function(error) {
             return console.error(error);
           });
         };
       })(this));
+      Coconut.headerView.update();
+      return Coconut.showNotification("Household member record(s) created");
     }
   };
 
@@ -854,7 +858,7 @@ Case = (function() {
     if ((_(this.questions).filter(function(question) {
       return question === 'Household';
     })).length !== 1) {
-      return _(this.Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold).times((function(_this) {
+      _(this.Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold).times((function(_this) {
         return function() {
           var result;
           result = {
@@ -869,12 +873,13 @@ Case = (function() {
             lastModifiedAt: moment(new Date()).format(Coconut.config.get("date_format"))
           };
           return Coconut.database.post(result).then(function() {
-            return Coconut.menuView.update();
+            return Coconut.headerView.update();
           })["catch"](function(error) {
             return console.error(error);
           });
         };
       })(this));
+      return Coconut.showNotification("Neighbor Household created");
     }
   };
 
@@ -1066,24 +1071,23 @@ DHISHierarchy = (function() {
 
   DHISHierarchy.prototype.loadExtendExport = function(options) {
     return this.loadDHISHierarchy({
-      dhisDocumentName: options.dhisDocumentName,
-      error: function(error) {
-        console.error("Error loading DHIS hierarchy:");
-        return console.error(error);
-      },
-      success: (function(_this) {
-        return function() {
-          return _this.loadDataToExtendWith({
-            error: function(error) {
-              console.error("Error loading data to extend DHIS hierarchy:");
-              return console.error(error);
-            },
-            success: function() {
-              return options.success(_this.extend());
-            }
-          });
-        };
-      })(this)
+      dhisDocumentName: options.dhisDocumentName
+    }).then((function(_this) {
+      return function() {
+        return _this.loadDataToExtendWith({
+          error: function(error) {
+            console.error("Error loading data to extend DHIS hierarchy:");
+            return console.error(error);
+          },
+          success: function() {
+            return options.success(_this.extend());
+          }
+        });
+      };
+    })(this))["catch"](function(error) {
+      console.error("Error loading DHIS hierarchy:");
+      console.error(error);
+      throw error;
     });
   };
 
@@ -1091,11 +1095,11 @@ DHISHierarchy = (function() {
     return Coconut.database.get(options.dhisDocumentName)["catch"](function(error) {
       console.error("Error loading Geo Hierarchy:");
       console.error(error);
-      return typeof options.error === "function" ? options.error(error) : void 0;
+      throw error(error);
     }).then((function(_this) {
       return function(result) {
         _this.rawData = result;
-        return options.success();
+        return Promise.resolve(_this.rawData);
       };
     })(this));
   };
@@ -1301,7 +1305,7 @@ DHISHierarchy = (function() {
 module.exports = DHISHierarchy;
 
 
-},{"chance":10,"underscore":13}],3:[function(require,module,exports){
+},{"chance":16,"underscore":18}],3:[function(require,module,exports){
 var GeoHierarchy, _,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
@@ -1638,7 +1642,45 @@ GeoHierarchy = (function() {
 module.exports = GeoHierarchy;
 
 
-},{"underscore":13}],4:[function(require,module,exports){
+},{"underscore":18}],4:[function(require,module,exports){
+HeaderView.prototype.questionTabs = function(options) {
+  var menuIcons, navlinks;
+  menuIcons = {
+    'Case Notification': 'wifi',
+    'Facility': 'hospital',
+    'Household': 'home-map-marker',
+    'Household Members': 'account'
+  };
+  if (Coconut.questions) {
+    navlinks = Coconut.questions.map(function(question, index) {
+      var results_url, spanID;
+      results_url = "#" + Coconut.databaseName + "/show/results/" + (escape(question.id));
+      spanID = question.id.replace(/\s/g, "_");
+      return "<a class='mdl-navigation__link top_links' href='" + results_url + "'><span id='" + spanID + "' class='mdl-badge' data-badge=''><i class='mdl-layout--small-screen-only mdi mdi-" + menuIcons[question.id] + "'></i> <span class='mdl-layout--large-screen-only'>" + question.id + "</span></span></a>";
+    }).join(" ");
+    return $('nav.mdl-navigation').html(navlinks);
+  }
+};
+
+HeaderView.prototype.update = function() {
+  return Coconut.questions.each((function(_this) {
+    return function(question, index) {
+      return Coconut.database.query("results/results", {
+        startkey: [question.id, false],
+        endkey: [question.id, false, {}],
+        include_docs: false
+      }, function(error, result) {
+        if (error) {
+          console.log(error);
+        }
+        return $("span#" + (question.id.replace(/\s/g, '_'))).attr('data-badge', result.rows.length);
+      });
+    };
+  })(this));
+};
+
+
+},{}],5:[function(require,module,exports){
 var HouseholdLocationSelectorView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1647,8 +1689,11 @@ var HouseholdLocationSelectorView,
 HouseholdLocationSelectorView = (function(superClass) {
   extend(HouseholdLocationSelectorView, superClass);
 
-  function HouseholdLocationSelectorView(targetLocationField) {
+  function HouseholdLocationSelectorView(targetLocationField, disableTarget) {
     this.targetLocationField = targetLocationField;
+    if (disableTarget == null) {
+      disableTarget = true;
+    }
     this.updateTargetLocationField = bind(this.updateTargetLocationField, this);
     this.addLocation = bind(this.addLocation, this);
     this.remove = bind(this.remove, this);
@@ -1670,6 +1715,7 @@ HouseholdLocationSelectorView = (function(superClass) {
     if (this.$('.addLocation').length === 0) {
       this.$el.append(this.addLocationButton());
     }
+    this.targetLocationField.prop('disabled', disableTarget);
   }
 
   HouseholdLocationSelectorView.prototype.events = {
@@ -1740,7 +1786,41 @@ HouseholdLocationSelectorView = (function(superClass) {
 module.exports = HouseholdLocationSelectorView;
 
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
+MenuView.prototype.questionLinks = function(option) {
+  return Coconut.questions.fetch({
+    success: (function(_this) {
+      return function() {
+        var menuIcons;
+        menuIcons = {
+          'Case Notification': 'wifi',
+          'Facility': 'hospital',
+          'Household': 'home-map-marker',
+          'Household Members': 'account'
+        };
+        $("#drawer_question_sets").html(Coconut.questions.map(function(question, index) {
+          var new_url, results_url, spanID;
+          new_url = "#" + Coconut.databaseName + "/new/result/" + (escape(question.id));
+          results_url = "#" + Coconut.databaseName + "/show/results/" + (escape(question.id));
+          spanID = question.id.replace(/\s/g, "_");
+          return "<div> <a class='mdl-navigation__link' href='" + results_url + "'><span id='" + spanID + "' class='" + spanID + " mdl-badge' data-badge=''><i class='mdl-color-text--accent mdi mdi-" + menuIcons[question.id] + "'></i> <span>" + question.id + "</span></span></a> </div>";
+        }).join(" "));
+        return componentHandler.upgradeDom();
+      };
+    })(this)
+  });
+};
+
+MenuView.prototype.generalMenu = function() {
+  return $("#drawer_general_menu").html(_(["#" + Coconut.databaseName + "/sync,sync,Sync data", "#" + Coconut.databaseName + "/manage,wrench,Manage", "#" + Coconut.databaseName + "/logout,logout,Logout"]).map(function(linkData) {
+    var icon, linktext, ref, url;
+    ref = linkData.split(","), url = ref[0], icon = ref[1], linktext = ref[2];
+    return "<a class='mdl-navigation__link' href='" + url + "' id='" + (linktext.toLowerCase()) + "'><i class='mdl-color-text--blue-grey-400 mdi mdi-" + icon + "'></i>" + linktext + "</a>";
+  }).join(""));
+};
+
+
+},{}],7:[function(require,module,exports){
 (function (global){
 var DHISHierarchy, GeoHierarchyClass, Sync, onStartup;
 
@@ -1754,105 +1834,36 @@ global.HouseholdLocationSelectorView = require('./HouseholdLocationSelectorView'
 
 global.SummaryView = require('./SummaryView');
 
+global.TransferView = require('./TransferView');
+
 Sync = require('./Sync');
 
 onStartup = function() {
-  var dhisHierarchy;
-  dhisHierarchy = new DHISHierarchy();
-  return dhisHierarchy.loadExtendExport({
-    dhisDocumentName: "dhis2",
-    error: function(error) {
-      return console.error(error);
-    },
-    success: function(result) {
-      var originalResultsViewRender;
-      global.GeoHierarchy = new GeoHierarchyClass(result);
-      global.FacilityHierarchy = GeoHierarchy;
-      Coconut.syncView.sync = new Sync();
-      Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials());
-      Coconut.router.route(":database/summary", function() {
-        if (Coconut.summaryView == null) {
-          Coconut.summaryView = new SummaryView();
-        }
-        return Coconut.database.query("casesWithSummaryData", {
-          descending: true,
-          include_docs: false,
-          limit: 100
-        }, (function(_this) {
-          return function(error, result) {
-            if (error) {
-              return console.error(JSON.stringify(error));
-            } else {
-              return Coconut.summaryView.render(result);
-            }
-          };
-        })(this));
-      });
-      Coconut.router.route(":database/transfer/:caseID", function(caseID) {
-        var caseResults;
-        if (Coconut.currentUser) {
-          $("#content").html("<h2> Select a user to transfer " + caseID + " to: </h2> <select id='users'> <option></option> </select> <br/> <button onClick='window.history.back()'>Cancel</button> <h3>Case Results to be transferred</h3> <div id='caseinfo'></div>");
-          caseResults = [];
-          Coconut.database.query("cases", {
-            key: caseID,
-            include_docs: true
-          }, (function(_this) {
-            return function(error, result) {
-              if (error) {
-                console.error(error);
-              }
-              caseResults = _.pluck(result.rows, "doc");
-              Coconut.database.query("usersByDistrict", {}, function(error, result) {
-                return $("#content select").append(_(result.rows).map(function(user) {
-                  if (user.key == null) {
-                    return "";
-                  }
-                  return "<option id='" + user.id + "'>" + user.key + "   " + (user.value.join("   ")) + "</option>";
-                }).join(""));
-              });
-              return $("#caseinfo").html(_(caseResults).map(function(caseResult) {
-                return "<pre> " + (JSON.stringify(caseResult, null, 2)) + " </pre>";
-              }).join("<br/>"));
-            };
-          })(this));
-          return $("select").change(function() {
-            var user;
-            user = $('select').find(":selected").text();
-            if (confirm("Are you sure you want to transfer Case:" + caseID + " to " + user + "?")) {
-              _(caseResults).each(function(caseResult) {
-                Coconut.debug("Marking " + caseResult._id + " as transferred");
-                if (caseResult.transferred == null) {
-                  caseResult.transferred = [];
-                }
-                return caseResult.transferred.push({
-                  from: Coconut.currentUser.get("_id"),
-                  to: $('select').find(":selected").attr("id"),
-                  time: moment().format("YYYY-MM-DD HH:mm"),
-                  notifiedViaSms: [],
-                  received: false
-                });
-              });
-              return Coconut.cloudDatabase.bulkDocs({
-                docs: caseResults
-              })["catch"](function(error) {
-                console.error("Could not save " + (JSON.stringify(caseResults)) + ":");
-                return console.error(error);
-              }).then(function() {
-                return Coconut.router.navigate("", true);
-              });
-            }
-          });
-        }
-      });
-      originalResultsViewRender = ResultsView.prototype.render;
-      return ResultsView.prototype.render = function() {
-        originalResultsViewRender.apply(this, arguments);
-        return _.delay(function() {
-          return $("[href='#not-complete-panel']")[0].click();
-        }, 500);
-      };
-    }
-  });
+  var dhisHierarchy, error, error1;
+  try {
+    require('./RouterPlugins');
+    require('./HeaderViewPlugins');
+    require('./MenuViewPlugins');
+    require('./QuestionViewPlugins');
+    require('./ResultsViewPlugins');
+    dhisHierarchy = new DHISHierarchy();
+    return dhisHierarchy.loadExtendExport({
+      dhisDocumentName: "dhis2",
+      error: function(error) {
+        return console.error(error);
+      },
+      success: function(result) {
+        global.GeoHierarchy = new GeoHierarchyClass(result);
+        global.FacilityHierarchy = GeoHierarchy;
+        Coconut.syncView.sync = new Sync();
+        return Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials());
+      }
+    });
+  } catch (error1) {
+    error = error1;
+    console.error("PLUGIN ERROR:");
+    return console.error(error);
+  }
 };
 
 if (typeof StartPlugins === "undefined" || StartPlugins === null) {
@@ -1865,7 +1876,125 @@ module.exports = Plugin;
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Case":1,"./DHISHierarchy":2,"./GeoHierarchy":3,"./HouseholdLocationSelectorView":4,"./SummaryView":6,"./Sync":7}],6:[function(require,module,exports){
+},{"./Case":1,"./DHISHierarchy":2,"./GeoHierarchy":3,"./HeaderViewPlugins":4,"./HouseholdLocationSelectorView":5,"./MenuViewPlugins":6,"./QuestionViewPlugins":8,"./ResultsViewPlugins":9,"./RouterPlugins":10,"./SummaryView":11,"./Sync":12,"./TransferView":13}],8:[function(require,module,exports){
+(function (global){
+global.Case = require('./Case');
+
+console.log("AZZZZZ");
+
+QuestionView.prototype.initialize = function() {
+  if (Coconut.resultCollection == null) {
+    Coconut.resultCollection = new ResultCollection();
+  }
+  this.autoscrollTimer = 0;
+  return this.loadCase();
+};
+
+QuestionView.prototype.loadCase = function() {
+  var malariaCaseId;
+  malariaCaseId = ResultOfQuestion('Malaria Case ID');
+  if (malariaCaseId) {
+    window.currentCase = new Case({
+      caseID: malariaCaseId
+    });
+    return window.currentCase.fetch();
+  } else {
+    return _.delay(this.loadCase, 2000);
+  }
+};
+
+global.updateOutsideZanzibarLabel = function(element, startDays, endDays) {
+  return _.delay(function() {
+    var end, start;
+    start = moment(currentCase.indexCaseDiagnosisDate()).subtract(startDays, 'days');
+    end = moment(currentCase.indexCaseDiagnosisDate()).subtract(endDays, 'days');
+    return $(element).html($(element).html().replace(/Zanzibar.*/, 'Zanzibar between the ' + start.format('Do of MMM, YYYY') + ' (' + start.fromNow() + ') and ' + end.format('Do of MMM, YYYY') + ' (' + end.fromNow() + ')'));
+  }, 2000);
+};
+
+global.convertDayNumbersToDatesRelativeToDiagnosisDate = function(labelText) {
+  var element;
+  element = $("label:contains('" + labelText + "')");
+  return _.delay(function() {
+    var beginningRange, end, endRange, matches, start;
+    if (currentCase) {
+      matches = labelText.match(/(\d+)-(\d+)/);
+      beginningRange = matches[1];
+      endRange = matches[2];
+      start = moment(currentCase.indexCaseDiagnosisDate()).subtract(endRange, 'days');
+      end = moment(currentCase.indexCaseDiagnosisDate()).subtract(beginningRange, 'days');
+      return element.html(labelText.replace(/Zanzibar.*/, 'Zanzibar between the ' + start.format('Do of MMM, YYYY') + ' (' + start.fromNow() + ') and ' + end.format('Do of MMM, YYYY') + ' (' + end.fromNow() + ')'));
+    }
+  }, 2000);
+};
+
+global.convertDayNumbersToDatesRelativeToDiagnosisDateAndAddSelector = function(labelText) {
+  var element;
+  convertDayNumbersToDatesRelativeToDiagnosisDate(labelText);
+  element = $("label:contains('" + labelText + "')");
+  return new HouseholdLocationSelectorView(element);
+};
+
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./Case":1}],9:[function(require,module,exports){
+var originalResultsViewRender;
+
+originalResultsViewRender = ResultsView.prototype.render;
+
+ResultsView.prototype.render = function() {
+  originalResultsViewRender.apply(this, arguments);
+  return _.delay(function() {
+    return $("[href='#not-complete-panel']")[0].click();
+  }, 500);
+};
+
+
+},{}],10:[function(require,module,exports){
+Router.prototype["default"] = (function(_this) {
+  return function() {
+    console.log("DEFA");
+    Backbone.history.loadUrl();
+    return Coconut.router.navigate("#" + Coconut.databaseName + "/summary", {
+      trigger: true
+    });
+  };
+})(this);
+
+Coconut.router._bindRoutes();
+
+Coconut.router.route(":database/summary", function() {
+  if (Coconut.summaryView == null) {
+    Coconut.summaryView = new SummaryView();
+  }
+  return Coconut.database.query("casesWithSummaryData", {
+    descending: true,
+    include_docs: false,
+    limit: 100
+  }, (function(_this) {
+    return function(error, result) {
+      if (error) {
+        return console.error(JSON.stringify(error));
+      } else {
+        return Coconut.summaryView.render(result);
+      }
+    };
+  })(this));
+});
+
+Coconut.router.route(":database/transfer/:caseID", function(caseID) {
+  if (Coconut.currentUser) {
+    if (Coconut.transferView == null) {
+      Coconut.transferView = new TransferView({
+        caseID: caseID
+      });
+    }
+    return Coconut.transferView.render();
+  }
+});
+
+
+},{}],11:[function(require,module,exports){
 var SummaryView,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -1882,13 +2011,24 @@ SummaryView = (function(superClass) {
   SummaryView.prototype.el = '#content';
 
   SummaryView.prototype.render = function(result) {
-    this.$el.html("<style> table#summary td{ border: solid black 1px; } table#summary tr.even{ background-color: #CFC; } table#summary tr.odd{ background-color: #FFFFB2; } table.results th.header, table.results td{ font-size:150%; } .dataTables_wrapper .dataTables_length{ display: none; } .dataTables_filter input{ display:inline; width:300px; } a[role=button]{ background-color: white; margin-right:5px; -moz-border-radius: 1em; -webkit-border-radius: 1em; border: solid gray 1px; font-family: Helvetica,Arial,sans-serif; font-weight: bold; color: #222; text-shadow: 0 1px 0 #fff; -webkit-background-clip: padding-box; -moz-background-clip: padding; background-clip: padding-box; padding: .6em 20px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; position: relative; zoom: 1; } a[role=button].paginate_disabled_previous, a[role=button].paginate_disabled_next{ color:gray; } a.ui-btn{ display: inline-block; width: 300px; } .dataTables_info{ float:right; } .dataTables_paginate{ margin-bottom:20px; } </style> Cases on this tablet: <table id='summary'> <thead> <td>Date</td> <td>ID</td> <td>Type</td> <td>Complete</td> <td>Transfer</td> <td>Options</td> </thead> <tbody> " + (_.map(result.rows, function(row) {
-      console.log(row);
-      return result = "<tr> <td>" + row.key + "</td> <td><a class='button' href='#edit/result/" + row.id + "'>" + row.value[0] + "</a></td> <td>" + row.value[1] + "</td> <td>" + (row.value[2] || "false") + "</td> <td><small> <pre> " + (row.value[3] != null ? JSON.stringify(row.value[3], null, 2).replace(/({\n|\n}|\")/g, "") : "") + " </pre></small></td> <td> <a class='button' style='text-decoration:none' href='#zanzibar/transfer/" + row.value[0] + "'>Transfer</a></td> </tr>";
-    }).join("")) + " </tbody>");
-    return $("table").dataTable({
+    this.$el.html("<style> th.header { text-align: left; } table, table.dataTable { width: 100%; margin: 0; } .dataTables_filter input{ display:inline; width:300px; } a[role=button]{ background-color: white; margin-right:5px; -moz-border-radius: 1em; -webkit-border-radius: 1em; border: solid gray 1px; font-family: Helvetica,Arial,sans-serif; font-weight: bold; color: #222; text-shadow: 0 1px 0 #fff; -webkit-background-clip: padding-box; -moz-background-clip: padding; background-clip: padding-box; padding: .6em 20px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; position: relative; zoom: 1; } a[role=button].paginate_disabled_previous, a[role=button].paginate_disabled_next{ color:gray; } a.ui-btn{ display: inline-block; width: 300px; } .dataTables_info{ float:right; } .dataTables_paginate{ margin-bottom:20px; } table.dataTable thead .sorting, table.dataTable thead .sorting_asc, table.dataTable thead .sorting_desc, table.dataTable thead .sorting_asc_disabled, table.dataTable thead .sorting_desc_disabled { background-position: center left; } </style> <h4 class='content_title'>Cases on this device:</h4> <table id='summary' class='tablesorter hover'> <thead><tr> <th class='header'>Date</th> <th class='header'>ID</th> <th class='header'>Type</th> <th class='header'>Complete</th> <th class='header'>Transfer</th> <th class='header'>Options</th> </tr></thead> <tbody> " + (_.map(result.rows, function(row) {
+      return result = "<tr> <td>" + row.key + "</td> <td><a class='button' href='#" + Coconut.databaseName + "/edit/result/" + row.id + "'>" + row.value[0] + "</a></td> <td>" + row.value[1] + "</td> <td>" + (row.value[2] ? 'Yes' : 'No') + "</td> <td><small> <pre> " + (row.value[3] != null ? JSON.stringify(row.value[3], null, 2).replace(/({\n|\n}|\")/g, "") : "") + " </pre></small></td> <td> <a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='#" + Coconut.databaseName + "/transfer/" + row.value[0] + "' title='Transfer'></a></td> </tr>";
+    }).join("")) + " </tbody> </table>");
+    return $("table#summary").DataTable({
+      retrieve: true,
       aaSorting: [[0, "desc"]],
-      iDisplayLength: 25
+      scrollX: true,
+      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+      dom: '<lf<t>ip>',
+      iDisplayLength: 25,
+      drawCallback: function() {
+        $(".dataTables_scrollHeadInner").css({
+          "width": "100%"
+        });
+        return $(".dataTable.no-footer").css({
+          "width": "100%"
+        });
+      }
     });
   };
 
@@ -1899,11 +2039,13 @@ SummaryView = (function(superClass) {
 module.exports = SummaryView;
 
 
-},{}],7:[function(require,module,exports){
-var Sync,
+},{}],12:[function(require,module,exports){
+var Dialog, Sync,
   bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
+
+Dialog = require('./js-libraries/modal-dialog');
 
 Sync = (function(superClass) {
   extend(Sync, superClass);
@@ -1915,8 +2057,8 @@ Sync = (function(superClass) {
     this.getFromCloud = bind(this.getFromCloud, this);
     this.log = bind(this.log, this);
     this.sendToCloud = bind(this.sendToCloud, this);
-    this.checkForInternet = bind(this.checkForInternet, this);
     this.backgroundSync = bind(this.backgroundSync, this);
+    this.setMinMinsBetweenSync = bind(this.setMinMinsBetweenSync, this);
     this.last_get_time = bind(this.last_get_time, this);
     this.was_last_get_successful = bind(this.was_last_get_successful, this);
     this.last_send_time = bind(this.last_send_time, this);
@@ -1967,79 +2109,93 @@ Sync = (function(superClass) {
     }
   };
 
-  Sync.prototype.backgroundSync = function() {
+  Sync.prototype.setMinMinsBetweenSync = function() {
     var minimumMinutesBetweenSync;
-    if (this.lastSuccessfulSync == null) {
-      this.lastSuccessfulSync = moment("2000-01-01");
+    minimumMinutesBetweenSync = Coconut.config.get('mobile_background_sync_freq') > 1440 ? 1440 : Coconut.config.get('mobile_background_sync_freq');
+    minimumMinutesBetweenSync = minimumMinutesBetweenSync < 5 ? 5 : minimumMinutesBetweenSync;
+    if (Coconut.config.get('mobile_background_sync')) {
+      _.delay(this.backgroundSync, minimumMinutesBetweenSync * 60 * 1000);
     }
-    console.log("backgroundSync called at " + (moment().toString()) + " lastSuccessfulSync was " + (this.lastSuccessfulSync.toString()) + "}");
-    minimumMinutesBetweenSync = 15;
-    _.delay(this.backgroundSync, minimumMinutesBetweenSync * 60 * 1000);
-    return Coconut.questions.each((function(_this) {
-      return function(question) {
-        return Coconut.database.query("results", {
-          startkey: [question.id, true, _this.lastSuccessfulSync.format(Coconut.config.get("date_format"))],
-          endkey: [question.id, true, {}]
-        }).then(function(result) {
-          if (result.rows.length > 0 && moment().diff(_this.lastSuccessfulSync, 'minutes') > minimumMinutesBetweenSync) {
-            console.log("Initiating background sync");
-            $("div#log").hide();
-            return _this.sendToCloud({
-              completeResultsOnly: true,
-              error: function(error) {
-                console.log("Error: " + (JSON.stringify(error)));
-                $("div#log").html("");
-                return $("div#log").show();
-              },
-              success: function() {
-                _this.lastSuccessfulSync = moment();
-                $("div#log").html("");
-                return $("div#log").show();
-              }
-            });
-          } else {
-            return console.log("No new results for " + question.id + " so not syncing");
-          }
-        });
-      };
-    })(this));
+    return minimumMinutesBetweenSync;
   };
 
-  Sync.prototype.checkForInternet = function(options) {
-    this.log("Checking for internet. (Is " + (Coconut.config.cloud_url()) + " is reachable?) Please wait.");
-    return Coconut.cloudDatabase.info()["catch"]((function(_this) {
-      return function(error) {
-        _this.log("ERROR! " + (Coconut.config.cloud_url()) + " is not reachable. Do you have enough airtime? Are you on WIFI?  Either the internet is not working or the site is down: " + (JSON.stringify(error)));
-        options.error();
-        return _this.save({
-          last_send_error: true
-        });
-      };
-    })(this)).then((function(_this) {
-      return function(result) {
-        _this.log((Coconut.config.cloud_url()) + " is reachable, so internet is available.");
-        return options.success();
-      };
-    })(this));
+  Sync.prototype.backgroundSync = function() {
+    if (Coconut.config.get('mobile_background_sync')) {
+      console.log(Coconut.config.get('mobile_background_sync'));
+      return Coconut.checkForInternet({
+        error: function(error) {
+          return console.log("No internet connection. BackgroundSync skipped.");
+        },
+        success: (function(_this) {
+          return function() {
+            var minimumMinutesBetweenSync;
+            if (_this.lastSuccessfulSync == null) {
+              _this.lastSuccessfulSync = moment("2000-01-01");
+            }
+            console.log("backgroundSync called at " + (moment().toString()) + " lastSuccessfulSync was " + (_this.lastSuccessfulSync.toString()) + "}");
+            minimumMinutesBetweenSync = _this.setMinMinsBetweenSync();
+            Coconut.headerView.toggleSyncIcon(true);
+            Coconut.questions.each(function(question) {
+              return Coconut.database.query("results", {
+                startkey: [question.id, true, _this.lastSuccessfulSync.format(Coconut.config.get("date_format"))],
+                endkey: [question.id, true, {}]
+              }).then(function(result) {
+                if (result.rows.length > 0 && moment().diff(_this.lastSuccessfulSync, 'minutes') > minimumMinutesBetweenSync) {
+                  console.log("Initiating background sync");
+                  $("div#log").hide();
+                  return _this.sendToCloud({
+                    completeResultsOnly: true,
+                    error: function(error) {
+                      console.log("Error: " + (JSON.stringify(error)));
+                      $("div#log").html("");
+                      return $("div#log").show();
+                    },
+                    success: function() {
+                      _this.lastSuccessfulSync = moment();
+                      $("div#log").html("");
+                      return $("div#log").show();
+                    }
+                  });
+                } else {
+                  return console.log("No new results for " + question.id + " so not syncing");
+                }
+              });
+            });
+            Coconut.headerView.toggleSyncIcon(false);
+            return Coconut.syncView.update();
+          };
+        })(this)
+      });
+    }
   };
 
   Sync.prototype.sendToCloud = function(options) {
+    var self;
     $("#status").html("Sending data...");
+    self = this;
     return this.fetch({
       error: (function(_this) {
         return function(error) {
-          return _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+          _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+          return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
         };
       })(this),
       success: (function(_this) {
         return function() {
-          return _this.checkForInternet({
+          return Coconut.checkForInternet({
             error: function(error) {
-              console.error("No internet");
-              return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
+              self.save({
+                last_send_error: true
+              });
+              if (options != null) {
+                if (typeof options.error === "function") {
+                  options.error(error);
+                }
+              }
+              return Coconut.noInternet();
             },
             success: function() {
-              _this.log("Creating list of all results on the tablet. Please wait.");
+              _this.log("Creating list of all results on the mobile device. Please wait.");
               return Coconut.database.query("results")["catch"](function(error) {
                 console.error(error);
                 _this.log("Could not retrieve list of results: " + (JSON.stringify(error)));
@@ -2080,19 +2236,30 @@ Sync = (function(superClass) {
   };
 
   Sync.prototype.getFromCloud = function(options) {
+    var self;
     console.debug(options);
     $("#status").html("Getting data...");
+    self = this;
     return this.fetch({
       error: (function(_this) {
         return function(error) {
-          return _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+          _this.log("Unable to fetch Sync doc: " + (JSON.stringify(error)));
+          return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
         };
       })(this),
       success: (function(_this) {
         return function() {
-          return _this.checkForInternet({
+          return Coconut.checkForInternet({
             error: function() {
-              return typeof options.error === "function" ? options.error(error) : void 0;
+              self.save({
+                last_send_error: true
+              });
+              if (options != null) {
+                if (typeof options.error === "function") {
+                  options.error(error);
+                }
+              }
+              return Coconut.noInternet();
             },
             success: function() {
               return _this.fetch({
@@ -2110,6 +2277,9 @@ Sync = (function(superClass) {
                         },
                         success: function() {
                           return _this.transferCasesIn({
+                            error: function(error) {
+                              return _this.log(error);
+                            },
                             success: function() {
                               return _this.fetch({
                                 error: function(error) {
@@ -2121,14 +2291,7 @@ Sync = (function(superClass) {
                                     last_get_time: new Date().getTime()
                                   });
                                   console.debug(options);
-                                  if (options != null) {
-                                    if (typeof options.success === "function") {
-                                      options.success();
-                                    }
-                                  }
-                                  return _.delay(function() {
-                                    return document.location.reload();
-                                  }, 5000);
+                                  return options != null ? typeof options.success === "function" ? options.success() : void 0 : void 0;
                                 }
                               });
                             }
@@ -2147,9 +2310,14 @@ Sync = (function(superClass) {
   };
 
   Sync.prototype.replicateApplicationDocs = function(options) {
-    return this.checkForInternet({
+    return Coconut.checkForInternet({
       error: function(error) {
-        return options != null ? typeof options.error === "function" ? options.error(error) : void 0 : void 0;
+        if (options != null) {
+          if (typeof options.error === "function") {
+            options.error(error);
+          }
+        }
+        return Coconut.noInternet();
       },
       success: (function(_this) {
         return function() {
@@ -2166,7 +2334,6 @@ Sync = (function(superClass) {
               return console.log(info);
             }).on('complete', function(info) {
               console.log("COMPLETE");
-              console.log(info);
               return Coconut.syncPlugins({
                 success: function() {
                   return options != null ? typeof options.success === "function" ? options.success() : void 0 : void 0;
@@ -2187,7 +2354,7 @@ Sync = (function(superClass) {
   };
 
   Sync.prototype.getNewNotifications = function(options) {
-    this.log("Looking for most recent Case Notification on tablet. Please wait.");
+    this.log("Looking for most recent Case Notification on device. Please wait.");
     return Coconut.database.query("rawNotificationsConvertedToCaseNotifications", {
       descending: true,
       include_docs: true,
@@ -2354,9 +2521,9 @@ Sync = (function(superClass) {
             return _(resultDocs).each(function(resultDoc) {
               resultDoc.transferred[resultDoc.transferred.length - 1].received = true;
               return Coconut.database.put(resultDoc)["catch"](function(error) {
-                return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be saved on tablet: " + (JSON.stringify(error)));
+                return _this.log("ERROR: " + caseId + ": " + (resultDoc.question || "Notification") + " could not be saved on device: " + (JSON.stringify(error)));
               }).then(function(result) {
-                _this.log(caseId + ": " + (resultDoc.question || "Notification") + " saved on tablet");
+                _this.log(caseId + ": " + (resultDoc.question || "Notification") + " saved on device");
                 return Coconut.database.replicate.to(Coconut.cloudDatabase, {
                   doc_ids: [resultDoc._id]
                 })["catch"](function(error) {
@@ -2380,10 +2547,291 @@ Sync = (function(superClass) {
 module.exports = Sync;
 
 
-},{}],8:[function(require,module,exports){
+},{"./js-libraries/modal-dialog":14}],13:[function(require,module,exports){
+var Dialog, TransferView,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+Dialog = require('./js-libraries/modal-dialog');
+
+TransferView = (function(superClass) {
+  extend(TransferView, superClass);
+
+  function TransferView() {
+    this.render = bind(this.render, this);
+    this.transfer = bind(this.transfer, this);
+    this.initialize = bind(this.initialize, this);
+    return TransferView.__super__.constructor.apply(this, arguments);
+  }
+
+  TransferView.prototype.el = '#content';
+
+  TransferView.prototype.initialize = function(options) {
+    this.options = options;
+    return _.bindAll(this, 'render');
+  };
+
+  TransferView.prototype.events = {
+    "click #cancel_button": "cancel",
+    "click #transfer_button": "transfer",
+    "change select#users": "userSelected"
+  };
+
+  TransferView.prototype.cancel = function() {
+    return Coconut.router.navigate("#" + Coconut.databaseName, true);
+  };
+
+  TransferView.prototype.userSelected = function() {
+    if ($('select').find(":selected").text()) {
+      return $('button#transfer_button').prop('disabled', false);
+    } else {
+      return $('button#transfer_button').prop('disabled', true);
+    }
+  };
+
+  TransferView.prototype.transfer = function() {
+    var caseID, caseResults, user;
+    user = $('select').find(":selected").text();
+    caseID = this.options.caseID;
+    caseResults = this.options.caseResults;
+    _(caseResults).each(function(caseResult) {
+      if (caseResult.transferred == null) {
+        caseResult.transferred = [];
+      }
+      return caseResult.transferred.push({
+        from: Coconut.currentUser.get("_id"),
+        to: $('select').find(":selected").attr("id"),
+        time: moment().format("YYYY-MM-DD HH:mm"),
+        notifiedViaSms: [],
+        received: false
+      });
+    });
+    return Coconut.database.bulkDocs({
+      docs: caseResults
+    })["catch"](function(error) {
+      console.error("Could not save " + (JSON.stringify(caseResults)) + ":");
+      return console.error(error);
+    }).then(function() {
+      return Coconut.syncView.sync.sendToCloud({
+        error: (function(_this) {
+          return function() {
+            return console.log("Sync failed, so transfers will be delayed until next sync.");
+          };
+        })(this),
+        success: (function(_this) {
+          return function() {
+            return Dialog.showDialog({
+              title: "CASE TRANSFER",
+              text: "Case " + caseID + " has been successfully transferred to " + user,
+              neutral: {
+                title: "Continue",
+                onClick: function(e) {
+                  var dialog;
+                  dialog = $('#orrsDiag');
+                  return Dialog.hideDialog(dialog, function() {
+                    return Coconut.router.navigate("#" + Coconut.databaseName, true);
+                  });
+                }
+              }
+            });
+          };
+        })(this)
+      });
+    });
+  };
+
+  TransferView.prototype.render = function() {
+    this.$el.html("<style> th.header { text-align: left;} .mdl-select { width: inherit;} table.dataTable tbody td { padding: 8px 20px;} table.dataTable thead .sorting, table.dataTable thead .sorting_asc, table.dataTable thead .sorting_desc, table.dataTable thead .sorting_asc_disabled, table.dataTable thead .sorting_desc_disabled { background-position: center left; } </style> <div style='padding-bottom: 20px;'> <h3 class='content_title'>Transfer this case to:</h3> <div class='mdl-select mdl-js-select mdl-select--floating-label'> <select class='mdl-select__input users' id='users' name='users'> <option></option> </select> <label class='mdl-select__label' for=users'>Select User</label> </div> <div> <button class='mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect' id='cancel_button'>Cancel</button> &nbsp; <button class='mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--colored' id='transfer_button' disabled>Transfer</button> </div> </div> <h4>Case Results to be transferred:</h4> <div> <table id='summary' class='tablesorter hover'> <thead><tr> <th class='header'>Case ID</th> <th class='header'>Question</th> <th class='header'>Complete</th> </tr></thead> <tbody> </tbody> </table> </div>");
+    Coconut.database.query("usersByDistrict", {}, function(error, result) {
+      return $("#content select").append(_(result.rows).map(function(user) {
+        if (user.key == null) {
+          return "";
+        }
+        return "<option id='" + user.id + "'>" + user.key + " - " + (user.value.join(' -  ')) + "</option>";
+      }).join(""));
+    });
+    return Coconut.database.query("cases", {
+      key: this.options.caseID,
+      include_docs: true
+    }, (function(_this) {
+      return function(error, result) {
+        var caseResults;
+        if (error) {
+          console.error(error);
+        }
+        caseResults = _.pluck(result.rows, "doc");
+        _this.options.caseResults = caseResults;
+        $("table#summary tbody").append(_(caseResults).map(function(caseResult) {
+          var completed;
+          completed = caseResult.complete === true ? 'Yes' : 'No';
+          return "<tr> <td>" + caseResult.MalariaCaseID + "</td> <td>" + caseResult.question + "</td> <td>" + (caseResult.complete === true ? 'Yes' : 'No') + "</td> </tr>";
+        }).join(""));
+        return $("table#summary").DataTable({
+          aaSorting: [[0, "desc"]],
+          scrollX: true,
+          searching: false,
+          paging: false,
+          retrieve: true,
+          info: false,
+          drawCallback: function() {
+            $(".dataTables_scrollHeadInner").css({
+              "width": "100%"
+            });
+            return $(".dataTable.no-footer").css({
+              "width": "100%"
+            });
+          }
+        });
+      };
+    })(this));
+  };
+
+  return TransferView;
+
+})(Backbone.View);
+
+module.exports = TransferView;
+
+
+},{"./js-libraries/modal-dialog":14}],14:[function(require,module,exports){
+// http://www.jqueryscript.net/lightbox/jQuery-Modal-Dialog-Plugin-For-Material-Design-Lite.html
+
+function showLoading() {
+    // remove existing loaders
+    $('.loading-container').remove();
+    $('<div id="orrsLoader" class="loading-container"><div><div class="mdl-spinner mdl-js-spinner is-active"></div></div></div>').appendTo("body");
+
+    componentHandler.upgradeElements($('.mdl-spinner').get());
+    setTimeout(function () {
+        $('#orrsLoader').css({opacity: 1});
+    }, 1);
+}
+
+function hideLoading() {
+    $('#orrsLoader').css({opacity: 0});
+    setTimeout(function () {
+        $('#orrsLoader').remove();
+    }, 400);
+}
+
+function showDialog(options) {
+    options = $.extend({
+        id: 'orrsDiag',
+        title: null,
+        text: null,
+        neutral: false,
+        negative: false,
+        positive: false,
+        cancelable: false,
+        contentStyle: null,
+        onLoaded: false,
+        onHidden: false,
+        hideOther: true
+    }, options);
+
+    if (options.hideOther) {
+        // remove existing dialogs
+        $('.dialog-container').remove();
+        $(document).unbind("keyup.dialog");
+    }
+
+    $('<div id="' + options.id + '" class="dialog-container"><div class="mdl-card mdl-shadow--16dp" id="' + options.id + '_content"></div></div>').appendTo("body");
+    var dialog = $('#' + options.id);
+    var content = dialog.find('.mdl-card');
+    if (options.contentStyle != null) content.css(options.contentStyle);
+    if (options.title != null) {
+        $('<h5>' + options.title + '</h5>').appendTo(content);
+    }
+    if (options.text != null) {
+        $('<p>' + options.text + '</p>').appendTo(content);
+    }
+    if (options.neutral || options.negative || options.positive) {
+        var buttonBar = $('<div class="mdl-card__actions dialog-button-bar"></div>');
+        if (options.neutral) {
+            options.neutral = $.extend({
+                id: 'neutral',
+                title: 'Neutral',
+                onClick: null
+            }, options.neutral);
+            var neuButton = $('<button class="mdl-button mdl-js-button mdl-js-ripple-effect" id="' + options.neutral.id + '">' + options.neutral.title + '</button>');
+            neuButton.click(function (e) {
+                e.preventDefault();
+                if (options.neutral.onClick == null || !options.neutral.onClick(e))
+                    hideDialog(dialog, options.onHidden)
+            });
+            neuButton.appendTo(buttonBar);
+        }
+        if (options.negative) {
+            options.negative = $.extend({
+                id: 'negative',
+                title: 'Cancel',
+                onClick: null
+            }, options.negative);
+            var negButton = $('<button class="mdl-button mdl-js-button mdl-js-ripple-effect" id="' + options.negative.id + '">' + options.negative.title + '</button>');
+            negButton.click(function (e) {
+                e.preventDefault();
+                if (options.negative.onClick == null || !options.negative.onClick(e))
+                    hideDialog(dialog, options.onHidden)
+            });
+            negButton.appendTo(buttonBar);
+        }
+        if (options.positive) {
+            options.positive = $.extend({
+                id: 'positive',
+                title: 'OK',
+                onClick: null
+            }, options.positive);
+            var posButton = $('<button class="mdl-button mdl-button--accent mdl-js-button mdl-js-ripple-effect" id="' + options.positive.id + '">' + options.positive.title + '</button>');
+            posButton.click(function (e) {
+                e.preventDefault();
+                if (options.positive.onClick == null || !options.positive.onClick(e))
+                    hideDialog(dialog, options.onHidden)
+            });
+            posButton.appendTo(buttonBar);
+        }
+        buttonBar.appendTo(content);
+    }
+    componentHandler.upgradeDom();
+    if (options.cancelable) {
+        dialog.click(function () {
+            hideDialog(dialog, options.onHidden);
+        });
+        $(document).bind("keyup.dialog", function (e) {
+            if (e.which == 27)
+                hideDialog(dialog, options.onHidden);
+        });
+        content.click(function (e) {
+            e.stopPropagation();
+        });
+    }
+    setTimeout(function () {
+        dialog.css({opacity: 1});
+        if (options.onLoaded)
+            options.onLoaded();
+    }, 1);
+}
+
+function hideDialog(dialog, callback) {
+    $(document).unbind("keyup.dialog");
+    dialog.css({opacity: 0});
+    setTimeout(function () {
+        dialog.remove();
+        if (callback)
+            callback();
+    }, 400);
+}
+
+module.exports = {
+  showLoading: showLoading,
+  hideLoading: hideLoading,
+  showDialog: showDialog,
+  hideDialog: hideDialog
+}
+
+},{}],15:[function(require,module,exports){
 'use strict'
 
-exports.byteLength = byteLength
 exports.toByteArray = toByteArray
 exports.fromByteArray = fromByteArray
 
@@ -2391,17 +2839,23 @@ var lookup = []
 var revLookup = []
 var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
 
-var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-for (var i = 0, len = code.length; i < len; ++i) {
-  lookup[i] = code[i]
-  revLookup[code.charCodeAt(i)] = i
+function init () {
+  var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  for (var i = 0, len = code.length; i < len; ++i) {
+    lookup[i] = code[i]
+    revLookup[code.charCodeAt(i)] = i
+  }
+
+  revLookup['-'.charCodeAt(0)] = 62
+  revLookup['_'.charCodeAt(0)] = 63
 }
 
-revLookup['-'.charCodeAt(0)] = 62
-revLookup['_'.charCodeAt(0)] = 63
+init()
 
-function placeHoldersCount (b64) {
+function toByteArray (b64) {
+  var i, j, l, tmp, placeHolders, arr
   var len = b64.length
+
   if (len % 4 > 0) {
     throw new Error('Invalid string. Length must be a multiple of 4')
   }
@@ -2411,19 +2865,9 @@ function placeHoldersCount (b64) {
   // represent one byte
   // if there is only one, then the three characters before it represent 2 bytes
   // this is just a cheap hack to not do indexOf twice
-  return b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
-}
+  placeHolders = b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
 
-function byteLength (b64) {
   // base64 is 4/3 + up to two characters of the original data
-  return b64.length * 3 / 4 - placeHoldersCount(b64)
-}
-
-function toByteArray (b64) {
-  var i, j, l, tmp, placeHolders, arr
-  var len = b64.length
-  placeHolders = placeHoldersCount(b64)
-
   arr = new Arr(len * 3 / 4 - placeHolders)
 
   // if there are placeholders, only get up to the last complete 4 chars
@@ -2496,1802 +2940,9 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],9:[function(require,module,exports){
-(function (global){
-/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-/* eslint-disable no-proto */
-
-'use strict'
-
-var base64 = require('base64-js')
-var ieee754 = require('ieee754')
-var isArray = require('isarray')
-
-exports.Buffer = Buffer
-exports.SlowBuffer = SlowBuffer
-exports.INSPECT_MAX_BYTES = 50
-
-/**
- * If `Buffer.TYPED_ARRAY_SUPPORT`:
- *   === true    Use Uint8Array implementation (fastest)
- *   === false   Use Object implementation (most compatible, even IE6)
- *
- * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
- * Opera 11.6+, iOS 4.2+.
- *
- * Due to various browser bugs, sometimes the Object implementation will be used even
- * when the browser supports typed arrays.
- *
- * Note:
- *
- *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
- *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
- *
- *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
- *
- *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *     incorrect length in some situations.
-
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
- * get the Object implementation, which is slower but behaves correctly.
- */
-Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
-  ? global.TYPED_ARRAY_SUPPORT
-  : typedArraySupport()
-
-/*
- * Export kMaxLength after typed array support is determined.
- */
-exports.kMaxLength = kMaxLength()
-
-function typedArraySupport () {
-  try {
-    var arr = new Uint8Array(1)
-    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
-    return arr.foo() === 42 && // typed array instances can be augmented
-        typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
-  } catch (e) {
-    return false
-  }
-}
-
-function kMaxLength () {
-  return Buffer.TYPED_ARRAY_SUPPORT
-    ? 0x7fffffff
-    : 0x3fffffff
-}
-
-function createBuffer (that, length) {
-  if (kMaxLength() < length) {
-    throw new RangeError('Invalid typed array length')
-  }
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    // Return an augmented `Uint8Array` instance, for best performance
-    that = new Uint8Array(length)
-    that.__proto__ = Buffer.prototype
-  } else {
-    // Fallback: Return an object instance of the Buffer class
-    if (that === null) {
-      that = new Buffer(length)
-    }
-    that.length = length
-  }
-
-  return that
-}
-
-/**
- * The Buffer constructor returns instances of `Uint8Array` that have their
- * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
- * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
- * and the `Uint8Array` methods. Square bracket notation works as expected -- it
- * returns a single octet.
- *
- * The `Uint8Array` prototype remains unmodified.
- */
-
-function Buffer (arg, encodingOrOffset, length) {
-  if (!Buffer.TYPED_ARRAY_SUPPORT && !(this instanceof Buffer)) {
-    return new Buffer(arg, encodingOrOffset, length)
-  }
-
-  // Common case.
-  if (typeof arg === 'number') {
-    if (typeof encodingOrOffset === 'string') {
-      throw new Error(
-        'If encoding is specified then the first argument must be a string'
-      )
-    }
-    return allocUnsafe(this, arg)
-  }
-  return from(this, arg, encodingOrOffset, length)
-}
-
-Buffer.poolSize = 8192 // not used by this implementation
-
-// TODO: Legacy, not needed anymore. Remove in next major version.
-Buffer._augment = function (arr) {
-  arr.__proto__ = Buffer.prototype
-  return arr
-}
-
-function from (that, value, encodingOrOffset, length) {
-  if (typeof value === 'number') {
-    throw new TypeError('"value" argument must not be a number')
-  }
-
-  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
-    return fromArrayBuffer(that, value, encodingOrOffset, length)
-  }
-
-  if (typeof value === 'string') {
-    return fromString(that, value, encodingOrOffset)
-  }
-
-  return fromObject(that, value)
-}
-
-/**
- * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
- * if value is a number.
- * Buffer.from(str[, encoding])
- * Buffer.from(array)
- * Buffer.from(buffer)
- * Buffer.from(arrayBuffer[, byteOffset[, length]])
- **/
-Buffer.from = function (value, encodingOrOffset, length) {
-  return from(null, value, encodingOrOffset, length)
-}
-
-if (Buffer.TYPED_ARRAY_SUPPORT) {
-  Buffer.prototype.__proto__ = Uint8Array.prototype
-  Buffer.__proto__ = Uint8Array
-  if (typeof Symbol !== 'undefined' && Symbol.species &&
-      Buffer[Symbol.species] === Buffer) {
-    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
-    Object.defineProperty(Buffer, Symbol.species, {
-      value: null,
-      configurable: true
-    })
-  }
-}
-
-function assertSize (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('"size" argument must be a number')
-  } else if (size < 0) {
-    throw new RangeError('"size" argument must not be negative')
-  }
-}
-
-function alloc (that, size, fill, encoding) {
-  assertSize(size)
-  if (size <= 0) {
-    return createBuffer(that, size)
-  }
-  if (fill !== undefined) {
-    // Only pay attention to encoding if it's a string. This
-    // prevents accidentally sending in a number that would
-    // be interpretted as a start offset.
-    return typeof encoding === 'string'
-      ? createBuffer(that, size).fill(fill, encoding)
-      : createBuffer(that, size).fill(fill)
-  }
-  return createBuffer(that, size)
-}
-
-/**
- * Creates a new filled Buffer instance.
- * alloc(size[, fill[, encoding]])
- **/
-Buffer.alloc = function (size, fill, encoding) {
-  return alloc(null, size, fill, encoding)
-}
-
-function allocUnsafe (that, size) {
-  assertSize(size)
-  that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
-  if (!Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < size; ++i) {
-      that[i] = 0
-    }
-  }
-  return that
-}
-
-/**
- * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
- * */
-Buffer.allocUnsafe = function (size) {
-  return allocUnsafe(null, size)
-}
-/**
- * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
- */
-Buffer.allocUnsafeSlow = function (size) {
-  return allocUnsafe(null, size)
-}
-
-function fromString (that, string, encoding) {
-  if (typeof encoding !== 'string' || encoding === '') {
-    encoding = 'utf8'
-  }
-
-  if (!Buffer.isEncoding(encoding)) {
-    throw new TypeError('"encoding" must be a valid string encoding')
-  }
-
-  var length = byteLength(string, encoding) | 0
-  that = createBuffer(that, length)
-
-  var actual = that.write(string, encoding)
-
-  if (actual !== length) {
-    // Writing a hex string, for example, that contains invalid characters will
-    // cause everything after the first invalid character to be ignored. (e.g.
-    // 'abxxcd' will be treated as 'ab')
-    that = that.slice(0, actual)
-  }
-
-  return that
-}
-
-function fromArrayLike (that, array) {
-  var length = array.length < 0 ? 0 : checked(array.length) | 0
-  that = createBuffer(that, length)
-  for (var i = 0; i < length; i += 1) {
-    that[i] = array[i] & 255
-  }
-  return that
-}
-
-function fromArrayBuffer (that, array, byteOffset, length) {
-  array.byteLength // this throws if `array` is not a valid ArrayBuffer
-
-  if (byteOffset < 0 || array.byteLength < byteOffset) {
-    throw new RangeError('\'offset\' is out of bounds')
-  }
-
-  if (array.byteLength < byteOffset + (length || 0)) {
-    throw new RangeError('\'length\' is out of bounds')
-  }
-
-  if (byteOffset === undefined && length === undefined) {
-    array = new Uint8Array(array)
-  } else if (length === undefined) {
-    array = new Uint8Array(array, byteOffset)
-  } else {
-    array = new Uint8Array(array, byteOffset, length)
-  }
-
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    // Return an augmented `Uint8Array` instance, for best performance
-    that = array
-    that.__proto__ = Buffer.prototype
-  } else {
-    // Fallback: Return an object instance of the Buffer class
-    that = fromArrayLike(that, array)
-  }
-  return that
-}
-
-function fromObject (that, obj) {
-  if (Buffer.isBuffer(obj)) {
-    var len = checked(obj.length) | 0
-    that = createBuffer(that, len)
-
-    if (that.length === 0) {
-      return that
-    }
-
-    obj.copy(that, 0, 0, len)
-    return that
-  }
-
-  if (obj) {
-    if ((typeof ArrayBuffer !== 'undefined' &&
-        obj.buffer instanceof ArrayBuffer) || 'length' in obj) {
-      if (typeof obj.length !== 'number' || isnan(obj.length)) {
-        return createBuffer(that, 0)
-      }
-      return fromArrayLike(that, obj)
-    }
-
-    if (obj.type === 'Buffer' && isArray(obj.data)) {
-      return fromArrayLike(that, obj.data)
-    }
-  }
-
-  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
-}
-
-function checked (length) {
-  // Note: cannot use `length < kMaxLength()` here because that fails when
-  // length is NaN (which is otherwise coerced to zero.)
-  if (length >= kMaxLength()) {
-    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
-                         'size: 0x' + kMaxLength().toString(16) + ' bytes')
-  }
-  return length | 0
-}
-
-function SlowBuffer (length) {
-  if (+length != length) { // eslint-disable-line eqeqeq
-    length = 0
-  }
-  return Buffer.alloc(+length)
-}
-
-Buffer.isBuffer = function isBuffer (b) {
-  return !!(b != null && b._isBuffer)
-}
-
-Buffer.compare = function compare (a, b) {
-  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
-    throw new TypeError('Arguments must be Buffers')
-  }
-
-  if (a === b) return 0
-
-  var x = a.length
-  var y = b.length
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i]
-      y = b[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-Buffer.isEncoding = function isEncoding (encoding) {
-  switch (String(encoding).toLowerCase()) {
-    case 'hex':
-    case 'utf8':
-    case 'utf-8':
-    case 'ascii':
-    case 'latin1':
-    case 'binary':
-    case 'base64':
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      return true
-    default:
-      return false
-  }
-}
-
-Buffer.concat = function concat (list, length) {
-  if (!isArray(list)) {
-    throw new TypeError('"list" argument must be an Array of Buffers')
-  }
-
-  if (list.length === 0) {
-    return Buffer.alloc(0)
-  }
-
-  var i
-  if (length === undefined) {
-    length = 0
-    for (i = 0; i < list.length; ++i) {
-      length += list[i].length
-    }
-  }
-
-  var buffer = Buffer.allocUnsafe(length)
-  var pos = 0
-  for (i = 0; i < list.length; ++i) {
-    var buf = list[i]
-    if (!Buffer.isBuffer(buf)) {
-      throw new TypeError('"list" argument must be an Array of Buffers')
-    }
-    buf.copy(buffer, pos)
-    pos += buf.length
-  }
-  return buffer
-}
-
-function byteLength (string, encoding) {
-  if (Buffer.isBuffer(string)) {
-    return string.length
-  }
-  if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' &&
-      (ArrayBuffer.isView(string) || string instanceof ArrayBuffer)) {
-    return string.byteLength
-  }
-  if (typeof string !== 'string') {
-    string = '' + string
-  }
-
-  var len = string.length
-  if (len === 0) return 0
-
-  // Use a for loop to avoid recursion
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'ascii':
-      case 'latin1':
-      case 'binary':
-        return len
-      case 'utf8':
-      case 'utf-8':
-      case undefined:
-        return utf8ToBytes(string).length
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return len * 2
-      case 'hex':
-        return len >>> 1
-      case 'base64':
-        return base64ToBytes(string).length
-      default:
-        if (loweredCase) return utf8ToBytes(string).length // assume utf8
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-Buffer.byteLength = byteLength
-
-function slowToString (encoding, start, end) {
-  var loweredCase = false
-
-  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
-  // property of a typed array.
-
-  // This behaves neither like String nor Uint8Array in that we set start/end
-  // to their upper/lower bounds if the value passed is out of range.
-  // undefined is handled specially as per ECMA-262 6th Edition,
-  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
-  if (start === undefined || start < 0) {
-    start = 0
-  }
-  // Return early if start > this.length. Done here to prevent potential uint32
-  // coercion fail below.
-  if (start > this.length) {
-    return ''
-  }
-
-  if (end === undefined || end > this.length) {
-    end = this.length
-  }
-
-  if (end <= 0) {
-    return ''
-  }
-
-  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
-  end >>>= 0
-  start >>>= 0
-
-  if (end <= start) {
-    return ''
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  while (true) {
-    switch (encoding) {
-      case 'hex':
-        return hexSlice(this, start, end)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Slice(this, start, end)
-
-      case 'ascii':
-        return asciiSlice(this, start, end)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Slice(this, start, end)
-
-      case 'base64':
-        return base64Slice(this, start, end)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return utf16leSlice(this, start, end)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = (encoding + '').toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
-// Buffer instances.
-Buffer.prototype._isBuffer = true
-
-function swap (b, n, m) {
-  var i = b[n]
-  b[n] = b[m]
-  b[m] = i
-}
-
-Buffer.prototype.swap16 = function swap16 () {
-  var len = this.length
-  if (len % 2 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 16-bits')
-  }
-  for (var i = 0; i < len; i += 2) {
-    swap(this, i, i + 1)
-  }
-  return this
-}
-
-Buffer.prototype.swap32 = function swap32 () {
-  var len = this.length
-  if (len % 4 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 32-bits')
-  }
-  for (var i = 0; i < len; i += 4) {
-    swap(this, i, i + 3)
-    swap(this, i + 1, i + 2)
-  }
-  return this
-}
-
-Buffer.prototype.swap64 = function swap64 () {
-  var len = this.length
-  if (len % 8 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 64-bits')
-  }
-  for (var i = 0; i < len; i += 8) {
-    swap(this, i, i + 7)
-    swap(this, i + 1, i + 6)
-    swap(this, i + 2, i + 5)
-    swap(this, i + 3, i + 4)
-  }
-  return this
-}
-
-Buffer.prototype.toString = function toString () {
-  var length = this.length | 0
-  if (length === 0) return ''
-  if (arguments.length === 0) return utf8Slice(this, 0, length)
-  return slowToString.apply(this, arguments)
-}
-
-Buffer.prototype.equals = function equals (b) {
-  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
-  if (this === b) return true
-  return Buffer.compare(this, b) === 0
-}
-
-Buffer.prototype.inspect = function inspect () {
-  var str = ''
-  var max = exports.INSPECT_MAX_BYTES
-  if (this.length > 0) {
-    str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
-    if (this.length > max) str += ' ... '
-  }
-  return '<Buffer ' + str + '>'
-}
-
-Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
-  if (!Buffer.isBuffer(target)) {
-    throw new TypeError('Argument must be a Buffer')
-  }
-
-  if (start === undefined) {
-    start = 0
-  }
-  if (end === undefined) {
-    end = target ? target.length : 0
-  }
-  if (thisStart === undefined) {
-    thisStart = 0
-  }
-  if (thisEnd === undefined) {
-    thisEnd = this.length
-  }
-
-  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
-    throw new RangeError('out of range index')
-  }
-
-  if (thisStart >= thisEnd && start >= end) {
-    return 0
-  }
-  if (thisStart >= thisEnd) {
-    return -1
-  }
-  if (start >= end) {
-    return 1
-  }
-
-  start >>>= 0
-  end >>>= 0
-  thisStart >>>= 0
-  thisEnd >>>= 0
-
-  if (this === target) return 0
-
-  var x = thisEnd - thisStart
-  var y = end - start
-  var len = Math.min(x, y)
-
-  var thisCopy = this.slice(thisStart, thisEnd)
-  var targetCopy = target.slice(start, end)
-
-  for (var i = 0; i < len; ++i) {
-    if (thisCopy[i] !== targetCopy[i]) {
-      x = thisCopy[i]
-      y = targetCopy[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
-// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
-//
-// Arguments:
-// - buffer - a Buffer to search
-// - val - a string, Buffer, or number
-// - byteOffset - an index into `buffer`; will be clamped to an int32
-// - encoding - an optional encoding, relevant is val is a string
-// - dir - true for indexOf, false for lastIndexOf
-function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
-  // Empty buffer means no match
-  if (buffer.length === 0) return -1
-
-  // Normalize byteOffset
-  if (typeof byteOffset === 'string') {
-    encoding = byteOffset
-    byteOffset = 0
-  } else if (byteOffset > 0x7fffffff) {
-    byteOffset = 0x7fffffff
-  } else if (byteOffset < -0x80000000) {
-    byteOffset = -0x80000000
-  }
-  byteOffset = +byteOffset  // Coerce to Number.
-  if (isNaN(byteOffset)) {
-    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
-    byteOffset = dir ? 0 : (buffer.length - 1)
-  }
-
-  // Normalize byteOffset: negative offsets start from the end of the buffer
-  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
-  if (byteOffset >= buffer.length) {
-    if (dir) return -1
-    else byteOffset = buffer.length - 1
-  } else if (byteOffset < 0) {
-    if (dir) byteOffset = 0
-    else return -1
-  }
-
-  // Normalize val
-  if (typeof val === 'string') {
-    val = Buffer.from(val, encoding)
-  }
-
-  // Finally, search either indexOf (if dir is true) or lastIndexOf
-  if (Buffer.isBuffer(val)) {
-    // Special case: looking for empty string/buffer always fails
-    if (val.length === 0) {
-      return -1
-    }
-    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
-  } else if (typeof val === 'number') {
-    val = val & 0xFF // Search for a byte value [0-255]
-    if (Buffer.TYPED_ARRAY_SUPPORT &&
-        typeof Uint8Array.prototype.indexOf === 'function') {
-      if (dir) {
-        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
-      } else {
-        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
-      }
-    }
-    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
-  }
-
-  throw new TypeError('val must be string, number or Buffer')
-}
-
-function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
-  var indexSize = 1
-  var arrLength = arr.length
-  var valLength = val.length
-
-  if (encoding !== undefined) {
-    encoding = String(encoding).toLowerCase()
-    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
-        encoding === 'utf16le' || encoding === 'utf-16le') {
-      if (arr.length < 2 || val.length < 2) {
-        return -1
-      }
-      indexSize = 2
-      arrLength /= 2
-      valLength /= 2
-      byteOffset /= 2
-    }
-  }
-
-  function read (buf, i) {
-    if (indexSize === 1) {
-      return buf[i]
-    } else {
-      return buf.readUInt16BE(i * indexSize)
-    }
-  }
-
-  var i
-  if (dir) {
-    var foundIndex = -1
-    for (i = byteOffset; i < arrLength; i++) {
-      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
-        if (foundIndex === -1) foundIndex = i
-        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
-      } else {
-        if (foundIndex !== -1) i -= i - foundIndex
-        foundIndex = -1
-      }
-    }
-  } else {
-    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
-    for (i = byteOffset; i >= 0; i--) {
-      var found = true
-      for (var j = 0; j < valLength; j++) {
-        if (read(arr, i + j) !== read(val, j)) {
-          found = false
-          break
-        }
-      }
-      if (found) return i
-    }
-  }
-
-  return -1
-}
-
-Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
-  return this.indexOf(val, byteOffset, encoding) !== -1
-}
-
-Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
-}
-
-Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
-}
-
-function hexWrite (buf, string, offset, length) {
-  offset = Number(offset) || 0
-  var remaining = buf.length - offset
-  if (!length) {
-    length = remaining
-  } else {
-    length = Number(length)
-    if (length > remaining) {
-      length = remaining
-    }
-  }
-
-  // must be an even number of digits
-  var strLen = string.length
-  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
-
-  if (length > strLen / 2) {
-    length = strLen / 2
-  }
-  for (var i = 0; i < length; ++i) {
-    var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (isNaN(parsed)) return i
-    buf[offset + i] = parsed
-  }
-  return i
-}
-
-function utf8Write (buf, string, offset, length) {
-  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-function asciiWrite (buf, string, offset, length) {
-  return blitBuffer(asciiToBytes(string), buf, offset, length)
-}
-
-function latin1Write (buf, string, offset, length) {
-  return asciiWrite(buf, string, offset, length)
-}
-
-function base64Write (buf, string, offset, length) {
-  return blitBuffer(base64ToBytes(string), buf, offset, length)
-}
-
-function ucs2Write (buf, string, offset, length) {
-  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-Buffer.prototype.write = function write (string, offset, length, encoding) {
-  // Buffer#write(string)
-  if (offset === undefined) {
-    encoding = 'utf8'
-    length = this.length
-    offset = 0
-  // Buffer#write(string, encoding)
-  } else if (length === undefined && typeof offset === 'string') {
-    encoding = offset
-    length = this.length
-    offset = 0
-  // Buffer#write(string, offset[, length][, encoding])
-  } else if (isFinite(offset)) {
-    offset = offset | 0
-    if (isFinite(length)) {
-      length = length | 0
-      if (encoding === undefined) encoding = 'utf8'
-    } else {
-      encoding = length
-      length = undefined
-    }
-  // legacy write(string, encoding, offset, length) - remove in v0.13
-  } else {
-    throw new Error(
-      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
-    )
-  }
-
-  var remaining = this.length - offset
-  if (length === undefined || length > remaining) length = remaining
-
-  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
-    throw new RangeError('Attempt to write outside buffer bounds')
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'hex':
-        return hexWrite(this, string, offset, length)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Write(this, string, offset, length)
-
-      case 'ascii':
-        return asciiWrite(this, string, offset, length)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Write(this, string, offset, length)
-
-      case 'base64':
-        // Warning: maxLength not taken into account in base64Write
-        return base64Write(this, string, offset, length)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return ucs2Write(this, string, offset, length)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-Buffer.prototype.toJSON = function toJSON () {
-  return {
-    type: 'Buffer',
-    data: Array.prototype.slice.call(this._arr || this, 0)
-  }
-}
-
-function base64Slice (buf, start, end) {
-  if (start === 0 && end === buf.length) {
-    return base64.fromByteArray(buf)
-  } else {
-    return base64.fromByteArray(buf.slice(start, end))
-  }
-}
-
-function utf8Slice (buf, start, end) {
-  end = Math.min(buf.length, end)
-  var res = []
-
-  var i = start
-  while (i < end) {
-    var firstByte = buf[i]
-    var codePoint = null
-    var bytesPerSequence = (firstByte > 0xEF) ? 4
-      : (firstByte > 0xDF) ? 3
-      : (firstByte > 0xBF) ? 2
-      : 1
-
-    if (i + bytesPerSequence <= end) {
-      var secondByte, thirdByte, fourthByte, tempCodePoint
-
-      switch (bytesPerSequence) {
-        case 1:
-          if (firstByte < 0x80) {
-            codePoint = firstByte
-          }
-          break
-        case 2:
-          secondByte = buf[i + 1]
-          if ((secondByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
-            if (tempCodePoint > 0x7F) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 3:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
-            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 4:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          fourthByte = buf[i + 3]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
-            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
-              codePoint = tempCodePoint
-            }
-          }
-      }
-    }
-
-    if (codePoint === null) {
-      // we did not generate a valid codePoint so insert a
-      // replacement char (U+FFFD) and advance only 1 byte
-      codePoint = 0xFFFD
-      bytesPerSequence = 1
-    } else if (codePoint > 0xFFFF) {
-      // encode to utf16 (surrogate pair dance)
-      codePoint -= 0x10000
-      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
-      codePoint = 0xDC00 | codePoint & 0x3FF
-    }
-
-    res.push(codePoint)
-    i += bytesPerSequence
-  }
-
-  return decodeCodePointsArray(res)
-}
-
-// Based on http://stackoverflow.com/a/22747272/680742, the browser with
-// the lowest limit is Chrome, with 0x10000 args.
-// We go 1 magnitude less, for safety
-var MAX_ARGUMENTS_LENGTH = 0x1000
-
-function decodeCodePointsArray (codePoints) {
-  var len = codePoints.length
-  if (len <= MAX_ARGUMENTS_LENGTH) {
-    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
-  }
-
-  // Decode in chunks to avoid "call stack size exceeded".
-  var res = ''
-  var i = 0
-  while (i < len) {
-    res += String.fromCharCode.apply(
-      String,
-      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
-    )
-  }
-  return res
-}
-
-function asciiSlice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i] & 0x7F)
-  }
-  return ret
-}
-
-function latin1Slice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i])
-  }
-  return ret
-}
-
-function hexSlice (buf, start, end) {
-  var len = buf.length
-
-  if (!start || start < 0) start = 0
-  if (!end || end < 0 || end > len) end = len
-
-  var out = ''
-  for (var i = start; i < end; ++i) {
-    out += toHex(buf[i])
-  }
-  return out
-}
-
-function utf16leSlice (buf, start, end) {
-  var bytes = buf.slice(start, end)
-  var res = ''
-  for (var i = 0; i < bytes.length; i += 2) {
-    res += String.fromCharCode(bytes[i] + bytes[i + 1] * 256)
-  }
-  return res
-}
-
-Buffer.prototype.slice = function slice (start, end) {
-  var len = this.length
-  start = ~~start
-  end = end === undefined ? len : ~~end
-
-  if (start < 0) {
-    start += len
-    if (start < 0) start = 0
-  } else if (start > len) {
-    start = len
-  }
-
-  if (end < 0) {
-    end += len
-    if (end < 0) end = 0
-  } else if (end > len) {
-    end = len
-  }
-
-  if (end < start) end = start
-
-  var newBuf
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    newBuf = this.subarray(start, end)
-    newBuf.__proto__ = Buffer.prototype
-  } else {
-    var sliceLen = end - start
-    newBuf = new Buffer(sliceLen, undefined)
-    for (var i = 0; i < sliceLen; ++i) {
-      newBuf[i] = this[i + start]
-    }
-  }
-
-  return newBuf
-}
-
-/*
- * Need to make sure that buffer isn't trying to write out of bounds.
- */
-function checkOffset (offset, ext, length) {
-  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
-  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
-}
-
-Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) {
-    checkOffset(offset, byteLength, this.length)
-  }
-
-  var val = this[offset + --byteLength]
-  var mul = 1
-  while (byteLength > 0 && (mul *= 0x100)) {
-    val += this[offset + --byteLength] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  return this[offset]
-}
-
-Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return this[offset] | (this[offset + 1] << 8)
-}
-
-Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return (this[offset] << 8) | this[offset + 1]
-}
-
-Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return ((this[offset]) |
-      (this[offset + 1] << 8) |
-      (this[offset + 2] << 16)) +
-      (this[offset + 3] * 0x1000000)
-}
-
-Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] * 0x1000000) +
-    ((this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    this[offset + 3])
-}
-
-Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var i = byteLength
-  var mul = 1
-  var val = this[offset + --i]
-  while (i > 0 && (mul *= 0x100)) {
-    val += this[offset + --i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  if (!(this[offset] & 0x80)) return (this[offset])
-  return ((0xff - this[offset] + 1) * -1)
-}
-
-Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset] | (this[offset + 1] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset + 1] | (this[offset] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset]) |
-    (this[offset + 1] << 8) |
-    (this[offset + 2] << 16) |
-    (this[offset + 3] << 24)
-}
-
-Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] << 24) |
-    (this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    (this[offset + 3])
-}
-
-Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, true, 23, 4)
-}
-
-Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, false, 23, 4)
-}
-
-Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, true, 52, 8)
-}
-
-Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, false, 52, 8)
-}
-
-function checkInt (buf, value, offset, ext, max, min) {
-  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
-  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-}
-
-Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var mul = 1
-  var i = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
-  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-function objectWriteUInt16 (buf, value, offset, littleEndian) {
-  if (value < 0) value = 0xffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
-    buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
-      (littleEndian ? i : 1 - i) * 8
-  }
-}
-
-Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value & 0xff)
-    this[offset + 1] = (value >>> 8)
-  } else {
-    objectWriteUInt16(this, value, offset, true)
-  }
-  return offset + 2
-}
-
-Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 8)
-    this[offset + 1] = (value & 0xff)
-  } else {
-    objectWriteUInt16(this, value, offset, false)
-  }
-  return offset + 2
-}
-
-function objectWriteUInt32 (buf, value, offset, littleEndian) {
-  if (value < 0) value = 0xffffffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
-    buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
-  }
-}
-
-Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset + 3] = (value >>> 24)
-    this[offset + 2] = (value >>> 16)
-    this[offset + 1] = (value >>> 8)
-    this[offset] = (value & 0xff)
-  } else {
-    objectWriteUInt32(this, value, offset, true)
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 24)
-    this[offset + 1] = (value >>> 16)
-    this[offset + 2] = (value >>> 8)
-    this[offset + 3] = (value & 0xff)
-  } else {
-    objectWriteUInt32(this, value, offset, false)
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) {
-    var limit = Math.pow(2, 8 * byteLength - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = 0
-  var mul = 1
-  var sub = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) {
-    var limit = Math.pow(2, 8 * byteLength - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  var sub = 0
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
-  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  if (value < 0) value = 0xff + value + 1
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value & 0xff)
-    this[offset + 1] = (value >>> 8)
-  } else {
-    objectWriteUInt16(this, value, offset, true)
-  }
-  return offset + 2
-}
-
-Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 8)
-    this[offset + 1] = (value & 0xff)
-  } else {
-    objectWriteUInt16(this, value, offset, false)
-  }
-  return offset + 2
-}
-
-Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value & 0xff)
-    this[offset + 1] = (value >>> 8)
-    this[offset + 2] = (value >>> 16)
-    this[offset + 3] = (value >>> 24)
-  } else {
-    objectWriteUInt32(this, value, offset, true)
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  if (value < 0) value = 0xffffffff + value + 1
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 24)
-    this[offset + 1] = (value >>> 16)
-    this[offset + 2] = (value >>> 8)
-    this[offset + 3] = (value & 0xff)
-  } else {
-    objectWriteUInt32(this, value, offset, false)
-  }
-  return offset + 4
-}
-
-function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-  if (offset < 0) throw new RangeError('Index out of range')
-}
-
-function writeFloat (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 23, 4)
-  return offset + 4
-}
-
-Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, false, noAssert)
-}
-
-function writeDouble (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 52, 8)
-  return offset + 8
-}
-
-Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, false, noAssert)
-}
-
-// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
-Buffer.prototype.copy = function copy (target, targetStart, start, end) {
-  if (!start) start = 0
-  if (!end && end !== 0) end = this.length
-  if (targetStart >= target.length) targetStart = target.length
-  if (!targetStart) targetStart = 0
-  if (end > 0 && end < start) end = start
-
-  // Copy 0 bytes; we're done
-  if (end === start) return 0
-  if (target.length === 0 || this.length === 0) return 0
-
-  // Fatal error conditions
-  if (targetStart < 0) {
-    throw new RangeError('targetStart out of bounds')
-  }
-  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
-  if (end < 0) throw new RangeError('sourceEnd out of bounds')
-
-  // Are we oob?
-  if (end > this.length) end = this.length
-  if (target.length - targetStart < end - start) {
-    end = target.length - targetStart + start
-  }
-
-  var len = end - start
-  var i
-
-  if (this === target && start < targetStart && targetStart < end) {
-    // descending copy from end
-    for (i = len - 1; i >= 0; --i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    // ascending copy from start
-    for (i = 0; i < len; ++i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else {
-    Uint8Array.prototype.set.call(
-      target,
-      this.subarray(start, start + len),
-      targetStart
-    )
-  }
-
-  return len
-}
-
-// Usage:
-//    buffer.fill(number[, offset[, end]])
-//    buffer.fill(buffer[, offset[, end]])
-//    buffer.fill(string[, offset[, end]][, encoding])
-Buffer.prototype.fill = function fill (val, start, end, encoding) {
-  // Handle string cases:
-  if (typeof val === 'string') {
-    if (typeof start === 'string') {
-      encoding = start
-      start = 0
-      end = this.length
-    } else if (typeof end === 'string') {
-      encoding = end
-      end = this.length
-    }
-    if (val.length === 1) {
-      var code = val.charCodeAt(0)
-      if (code < 256) {
-        val = code
-      }
-    }
-    if (encoding !== undefined && typeof encoding !== 'string') {
-      throw new TypeError('encoding must be a string')
-    }
-    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
-      throw new TypeError('Unknown encoding: ' + encoding)
-    }
-  } else if (typeof val === 'number') {
-    val = val & 255
-  }
-
-  // Invalid ranges are not set to a default, so can range check early.
-  if (start < 0 || this.length < start || this.length < end) {
-    throw new RangeError('Out of range index')
-  }
-
-  if (end <= start) {
-    return this
-  }
-
-  start = start >>> 0
-  end = end === undefined ? this.length : end >>> 0
-
-  if (!val) val = 0
-
-  var i
-  if (typeof val === 'number') {
-    for (i = start; i < end; ++i) {
-      this[i] = val
-    }
-  } else {
-    var bytes = Buffer.isBuffer(val)
-      ? val
-      : utf8ToBytes(new Buffer(val, encoding).toString())
-    var len = bytes.length
-    for (i = 0; i < end - start; ++i) {
-      this[i + start] = bytes[i % len]
-    }
-  }
-
-  return this
-}
-
-// HELPER FUNCTIONS
-// ================
-
-var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
-
-function base64clean (str) {
-  // Node strips out invalid characters like \n and \t from the string, base64-js does not
-  str = stringtrim(str).replace(INVALID_BASE64_RE, '')
-  // Node converts strings with length < 2 to ''
-  if (str.length < 2) return ''
-  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
-  while (str.length % 4 !== 0) {
-    str = str + '='
-  }
-  return str
-}
-
-function stringtrim (str) {
-  if (str.trim) return str.trim()
-  return str.replace(/^\s+|\s+$/g, '')
-}
-
-function toHex (n) {
-  if (n < 16) return '0' + n.toString(16)
-  return n.toString(16)
-}
-
-function utf8ToBytes (string, units) {
-  units = units || Infinity
-  var codePoint
-  var length = string.length
-  var leadSurrogate = null
-  var bytes = []
-
-  for (var i = 0; i < length; ++i) {
-    codePoint = string.charCodeAt(i)
-
-    // is surrogate component
-    if (codePoint > 0xD7FF && codePoint < 0xE000) {
-      // last char was a lead
-      if (!leadSurrogate) {
-        // no lead yet
-        if (codePoint > 0xDBFF) {
-          // unexpected trail
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        } else if (i + 1 === length) {
-          // unpaired lead
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        }
-
-        // valid lead
-        leadSurrogate = codePoint
-
-        continue
-      }
-
-      // 2 leads in a row
-      if (codePoint < 0xDC00) {
-        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-        leadSurrogate = codePoint
-        continue
-      }
-
-      // valid surrogate pair
-      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
-    } else if (leadSurrogate) {
-      // valid bmp char, but last char was a lead
-      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-    }
-
-    leadSurrogate = null
-
-    // encode utf8
-    if (codePoint < 0x80) {
-      if ((units -= 1) < 0) break
-      bytes.push(codePoint)
-    } else if (codePoint < 0x800) {
-      if ((units -= 2) < 0) break
-      bytes.push(
-        codePoint >> 0x6 | 0xC0,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x10000) {
-      if ((units -= 3) < 0) break
-      bytes.push(
-        codePoint >> 0xC | 0xE0,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x110000) {
-      if ((units -= 4) < 0) break
-      bytes.push(
-        codePoint >> 0x12 | 0xF0,
-        codePoint >> 0xC & 0x3F | 0x80,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else {
-      throw new Error('Invalid code point')
-    }
-  }
-
-  return bytes
-}
-
-function asciiToBytes (str) {
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    // Node's code seems to be doing this and not & 0x7F..
-    byteArray.push(str.charCodeAt(i) & 0xFF)
-  }
-  return byteArray
-}
-
-function utf16leToBytes (str, units) {
-  var c, hi, lo
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    if ((units -= 2) < 0) break
-
-    c = str.charCodeAt(i)
-    hi = c >> 8
-    lo = c % 256
-    byteArray.push(lo)
-    byteArray.push(hi)
-  }
-
-  return byteArray
-}
-
-function base64ToBytes (str) {
-  return base64.toByteArray(base64clean(str))
-}
-
-function blitBuffer (src, dst, offset, length) {
-  for (var i = 0; i < length; ++i) {
-    if ((i + offset >= dst.length) || (i >= src.length)) break
-    dst[i + offset] = src[i]
-  }
-  return i
-}
-
-function isnan (val) {
-  return val !== val // eslint-disable-line no-self-compare
-}
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":8,"ieee754":11,"isarray":12}],10:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 (function (Buffer){
-//  Chance.js 1.0.6
+//  Chance.js 1.0.4
 //  http://chancejs.com
 //  (c) 2013 Victor Quinn
 //  Chance may be freely distributed or modified under the MIT license.
@@ -4355,7 +3006,7 @@ function isnan (val) {
         return this;
     }
 
-    Chance.prototype.VERSION = "1.0.6";
+    Chance.prototype.VERSION = "1.0.4";
 
     // Random helper functions
     function initOptions(options, defaults) {
@@ -4547,27 +3198,6 @@ function isnan (val) {
         testRange(options.min < 0, "Chance: Min cannot be less than zero.");
         return this.integer(options);
     };
-	
-	/**
-     *  Return a random hex number as string
-     *
-     *  NOTE the max and min are INCLUDED in the range. So:
-     *  chance.hex({min: '9', max: 'B'});
-     *  would return either '9', 'A' or 'B'.
-     *
-     *  @param {Object} [options={}] can specify a min and/or max and/or casing
-     *  @returns {String} a single random string hex number
-     *  @throws {RangeError} min cannot be greater than max
-     */
-    Chance.prototype.hex = function (options) {
-        options = initOptions(options, {min: 0, max: MAX_INT, casing: 'lower'});
-        testRange(options.min < 0, "Chance: Min cannot be less than zero.");
-		var integer = this.natural({min: options.min, max: options.max});
-		if (options.casing === 'upper') {
-			return integer.toString(16).toUpperCase();
-		}
-		return integer.toString(16);
-    };
 
     /**
      *  Return a random string
@@ -4747,10 +3377,6 @@ function isnan (val) {
         var val;
         for (var weightIndex = 0; weightIndex < weights.length; ++weightIndex) {
             val = weights[weightIndex];
-            if (isNaN(val)) {
-                throw new RangeError("all weights must be numbers");
-            }
-
             if (val > 0) {
                 sum += val;
             }
@@ -4999,10 +3625,6 @@ function isnan (val) {
     Chance.prototype.first = function (options) {
         options = initOptions(options, {gender: this.gender(), nationality: 'en'});
         return this.pick(this.get("firstNames")[options.gender.toLowerCase()][options.nationality.toLowerCase()]);
-    };
-
-    Chance.prototype.profession = function () {
-        return this.pick(this.get("professions"));
     };
 
     Chance.prototype.gender = function (options) {
@@ -5378,100 +4000,43 @@ function isnan (val) {
      *
      * * Make color uppercase
      * chance.color({casing: 'upper'})  => '#29CFA7'
-	 
-	 * * Min Max values for RGBA
-	 * var light_red = chance.color({format: 'hex', min_red: 200, max_red: 255, max_green: 0, max_blue: 0, min_alpha: .2, max_alpha: .3});
      *
      * @param  [object] options
      * @return [string] color value
      */
     Chance.prototype.color = function (options) {
-		function pad(n, width, z) {
-			z = z || '0';
-			n = n + '';
-			return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
-		}
-		
+
         function gray(value, delimiter) {
             return [value, value, value].join(delimiter || '');
         }
 
         function rgb(hasAlpha) {
-            var rgbValue     = (hasAlpha)    ? 'rgba' : 'rgb';
-            var alphaChannel = (hasAlpha)    ? (',' + this.floating({min:min_alpha, max:max_alpha})) : "";
-            var colorValue   = (isGrayscale) ? (gray(this.natural({min: min_rgb, max: max_rgb}), ',')) : (this.natural({min: min_green, max: max_green}) + ',' + this.natural({min: min_blue, max: max_blue}) + ',' + this.natural({max: 255}));
-            return rgbValue + '(' + colorValue + alphaChannel + ')';
+
+            var rgbValue    = (hasAlpha)    ? 'rgba' : 'rgb';
+            var alphaChanal = (hasAlpha)    ? (',' + this.floating({min:0, max:1})) : "";
+            var colorValue  = (isGrayscale) ? (gray(this.natural({max: 255}), ',')) : (this.natural({max: 255}) + ',' + this.natural({max: 255}) + ',' + this.natural({max: 255}));
+
+            return rgbValue + '(' + colorValue + alphaChanal + ')';
         }
 
         function hex(start, end, withHash) {
-            var symbol = (withHash) ? "#" : "";
-			var hexstring = "";
-			
-			if (isGrayscale) {
-				hexstring = gray(pad(this.hex({min: min_rgb, max: max_rgb}), 2));
-				if (options.format === "shorthex") {
-					hexstring = gray(this.hex({min: 0, max: 15}));
-					console.log("hex: " + hexstring);
-				}
-			}
-			else {
-				if (options.format === "shorthex") {
-					hexstring = pad(this.hex({min: Math.floor(min_red / 16), max: Math.floor(max_red / 16)}), 1) + pad(this.hex({min: Math.floor(min_green / 16), max: Math.floor(max_green / 16)}), 1) + pad(this.hex({min: Math.floor(min_blue / 16), max: Math.floor(max_blue / 16)}), 1);
-				}
-				else if (min_red !== undefined || max_red !== undefined || min_green !== undefined || max_green !== undefined || min_blue !== undefined || max_blue !== undefined) {
-					hexstring = pad(this.hex({min: min_red, max: max_red}), 2) + pad(this.hex({min: min_green, max: max_green}), 2) + pad(this.hex({min: min_blue, max: max_blue}), 2);
-				}
-				else {
-					hexstring = pad(this.hex({min: min_rgb, max: max_rgb}), 2) + pad(this.hex({min: min_rgb, max: max_rgb}), 2) + pad(this.hex({min: min_rgb, max: max_rgb}), 2);
-				}
-			}
-			
-            return symbol + hexstring;
+
+            var simbol = (withHash) ? "#" : "";
+            var expression  = (isGrayscale ? gray(this.hash({length: start})) : this.hash({length: end}));
+            return simbol + expression;
         }
 
         options = initOptions(options, {
             format: this.pick(['hex', 'shorthex', 'rgb', 'rgba', '0x', 'name']),
             grayscale: false,
-            casing: 'lower', 
-			min: 0, 
-			max: 255, 
-			min_red: undefined,
-			max_red: undefined, 
-			min_green: undefined,
-			max_green: undefined, 
-			min_blue: undefined, 
-			max_blue: undefined, 
-			min_alpha: 0,
-			max_alpha: 1
+            casing: 'lower'
         });
 
         var isGrayscale = options.grayscale;
-		var min_rgb = options.min;
-		var max_rgb = options.max;		
-		var min_red = options.min_red;
-		var max_red = options.max_red;
-		var min_green = options.min_green;
-		var max_green = options.max_green;
-		var min_blue = options.min_blue;
-		var max_blue = options.max_blue;
-		var min_alpha = options.min_alpha;
-		var max_alpha = options.max_alpha;
-		if (options.min_red === undefined) { min_red = min_rgb; }
-		if (options.max_red === undefined) { max_red = max_rgb; }
-		if (options.min_green === undefined) { min_green = min_rgb; }
-		if (options.max_green === undefined) { max_green = max_rgb; }
-		if (options.min_blue === undefined) { min_blue = min_rgb; }
-		if (options.max_blue === undefined) { max_blue = max_rgb; }
-		if (options.min_alpha === undefined) { min_alpha = 0; }
-		if (options.max_alpha === undefined) { max_alpha = 1; }
-		if (isGrayscale && min_rgb === 0 && max_rgb === 255 && min_red !== undefined && max_red !== undefined) {			
-			min_rgb = ((min_red + min_green + min_blue) / 3);
-			max_rgb = ((max_red + max_green + max_blue) / 3);
-		}
         var colorValue;
 
         if (options.format === 'hex') {
-            colorValue = hex.call(this, 2, 6, true);
+            colorValue =  hex.call(this, 2, 6, true);
         }
         else if (options.format === 'shorthex') {
             colorValue = hex.call(this, 1, 3, true);
@@ -5577,10 +4142,6 @@ function isnan (val) {
         var domain = options.domain_prefix ? options.domain_prefix + "." + options.domain : options.domain;
 
         return options.protocol + "://" + domain + "/" + options.path + extension;
-    };
-
-    Chance.prototype.port = function() {
-        return this.integer({min: 0, max: 65535});
     };
 
     // -- End Web --
@@ -5699,7 +4260,6 @@ function isnan (val) {
                 if (!options.mobile) {
                     numPick = this.pick([
                         //valid area codes of major cities/counties followed by random numbers in required format.
-
                         { area: '01' + this.character({ pool: '234569' }) + '1 ', sections: [3,4] },
                         { area: '020 ' + this.character({ pool: '378' }), sections: [3,4] },
                         { area: '023 ' + this.character({ pool: '89' }), sections: [3,4] },
@@ -5723,30 +4283,6 @@ function isnan (val) {
                     phone = options.formatted ? ukNum(numPick) : ukNum(numPick).replace(' ', '');
                 }
                 break;
-            case 'za':
-                if (!options.mobile) {
-                    numPick = this.pick([
-                       '01' + this.pick(['0', '1', '2', '3', '4', '5', '6', '7', '8']) + self.string({ pool: '0123456789', length: 7}),
-                       '02' + this.pick(['1', '2', '3', '4', '7', '8']) + self.string({ pool: '0123456789', length: 7}),
-                       '03' + this.pick(['1', '2', '3', '5', '6', '9']) + self.string({ pool: '0123456789', length: 7}),
-                       '04' + this.pick(['1', '2', '3', '4', '5','6','7', '8','9']) + self.string({ pool: '0123456789', length: 7}),   
-                       '05' + this.pick(['1', '3', '4', '6', '7', '8']) + self.string({ pool: '0123456789', length: 7}),
-                    ]);
-                    phone = options.formatted || numPick;
-                } else {
-                    numPick = this.pick([
-                        '060' + this.pick(['3','4','5','6','7','8','9']) + self.string({ pool: '0123456789', length: 6}),
-                        '061' + this.pick(['0','1','2','3','4','5','8']) + self.string({ pool: '0123456789', length: 6}),
-                        '06'  + self.string({ pool: '0123456789', length: 7}),
-                        '071' + this.pick(['0','1','2','3','4','5','6','7','8','9']) + self.string({ pool: '0123456789', length: 6}),
-                        '07'  + this.pick(['2','3','4','6','7','8','9']) + self.string({ pool: '0123456789', length: 7}),
-                        '08'  + this.pick(['0','1','2','3','4','5']) + self.string({ pool: '0123456789', length: 7}),                     
-                    ]);
-                    phone = options.formatted || numPick;
-                }
-                
-                break;
-
             case 'us':
                 var areacode = this.areacode(options).toString();
                 var exchange = this.natural({ min: 2, max: 9 }).toString() +
@@ -6177,21 +4713,6 @@ function isnan (val) {
         }
     };
 
-    /**
-     * Generate a string matching IBAN pattern (https://en.wikipedia.org/wiki/International_Bank_Account_Number). 
-     * No country-specific formats support (yet)
-     */
-    Chance.prototype.iban = function () {
-        var alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        var alphanum = alpha + '0123456789';
-        var iban = 
-            this.string({ length: 2, pool: alpha }) + 
-            this.pad(this.integer({ min: 0, max: 99 }), 2) + 
-            this.string({ length: 4, pool: alphanum }) + 
-            this.pad(this.natural(), this.natural({ min: 6, max: 26 }));
-        return iban;
-    };
-
     // -- End Finance
 
     // -- Regional
@@ -6448,58 +4969,58 @@ function isnan (val) {
     /**
      * #Description:
      * =====================================================
-     * Generate random file name with extension
+     * Generate random file name with extention
      *
-     * The argument provide extension type
+     * The argument provide extention type
      * -> raster
      * -> vector
      * -> 3d
      * -> document
      *
-     * If nothing is provided the function return random file name with random
-     * extension type of any kind
+     * If noting is provided the function return random file name with random
+     * extention type of any kind
      *
      * The user can validate the file name length range
-     * If nothing provided the generated file name is random
+     * If noting provided the generated file name is radom
      *
-     * #Extension Pool :
-     * * Currently the supported extensions are
-     *  -> some of the most popular raster image extensions
-     *  -> some of the most popular vector image extensions
-     *  -> some of the most popular 3d image extensions
-     *  -> some of the most popular document extensions
+     * #Extention Pool :
+     * * Currently the supported extentions are
+     *  -> some of the most popular raster image extentions
+     *  -> some of the most popular vector image extentions
+     *  -> some of the most popular 3d image extentions
+     *  -> some of the most popular document extentions
      *
      * #Examples :
      * =====================================================
      *
-     * Return random file name with random extension. The file extension
-     * is provided by a predefined collection of extensions. More about the extension
-     * pool can be found in #Extension Pool section
+     * Return random file name with random extention. The file extention
+     * is provided by a predifined collection of extentions. More abouth the extention
+     * pool can be fond in #Extention Pool section
      *
      * chance.file()
      * => dsfsdhjf.xml
      *
-     * In order to generate a file name with specific length, specify the
-     * length property and integer value. The extension is going to be random
+     * In order to generate a file name with sspecific length, specify the
+     * length property and integer value. The extention is going to be random
      *
      * chance.file({length : 10})
      * => asrtineqos.pdf
      *
-     * In order to generate file with extension from some of the predefined groups
-     * of the extension pool just specify the extension pool category in fileType property
+     * In order to geerate file with extention form some of the predifined groups
+     * of the extention pool just specify the extenton pool category in fileType property
      *
      * chance.file({fileType : 'raster'})
      * => dshgssds.psd
      *
-     * You can provide specific extension for your files
-     * chance.file({extension : 'html'})
+     * You can provide specific extention for your files
+     * chance.file({extention : 'html'})
      * => djfsd.html
      *
-     * Or you could pass custom collection of extensions by array or by object
-     * chance.file({extensions : [...]})
+     * Or you could pass custom collection of extentons bt array or by object
+     * chance.file({extentions : [...]})
      * => dhgsdsd.psd
      *
-     * chance.file({extensions : { key : [...], key : [...]}})
+     * chance.file({extentions : { key : [...], key : [...]}})
      * => djsfksdjsd.xml
      *
      * @param  [collection] options
@@ -6512,54 +5033,54 @@ function isnan (val) {
         var poolCollectionKey = "fileExtension";
         var typeRange   = Object.keys(this.get("fileExtension"));//['raster', 'vector', '3d', 'document'];
         var fileName;
-        var fileExtension;
+        var fileExtention;
 
         // Generate random file name
         fileName = this.word({length : fileOptions.length});
 
-        // Generate file by specific extension provided by the user
-        if(fileOptions.extension) {
+        // Generate file by specific extention provided by the user
+        if(fileOptions.extention) {
 
-            fileExtension = fileOptions.extension;
-            return (fileName + '.' + fileExtension);
+            fileExtention = fileOptions.extention;
+            return (fileName + '.' + fileExtention);
         }
 
-        // Generate file by specific extension collection
-        if(fileOptions.extensions) {
+        // Generate file by specific axtention collection
+        if(fileOptions.extentions) {
 
-            if(Array.isArray(fileOptions.extensions)) {
+            if(Array.isArray(fileOptions.extentions)) {
 
-                fileExtension = this.pickone(fileOptions.extensions);
-                return (fileName + '.' + fileExtension);
+                fileExtention = this.pickone(fileOptions.extentions);
+                return (fileName + '.' + fileExtention);
             }
-            else if(fileOptions.extensions.constructor === Object) {
+            else if(fileOptions.extentions.constructor === Object) {
 
-                var extensionObjectCollection = fileOptions.extensions;
-                var keys = Object.keys(extensionObjectCollection);
+                var extentionObjectCollection = fileOptions.extentions;
+                var keys = Object.keys(extentionObjectCollection);
 
-                fileExtension = this.pickone(extensionObjectCollection[this.pickone(keys)]);
-                return (fileName + '.' + fileExtension);
+                fileExtention = this.pickone(extentionObjectCollection[this.pickone(keys)]);
+                return (fileName + '.' + fileExtention);
             }
 
             throw new Error("Expect collection of type Array or Object to be passed as an argument ");
         }
 
-        // Generate file extension based on specific file type
+        // Generate file extention based on specific file type
         if(fileOptions.fileType) {
 
             var fileType = fileOptions.fileType;
             if(typeRange.indexOf(fileType) !== -1) {
 
-                fileExtension = this.pickone(this.get(poolCollectionKey)[fileType]);
-                return (fileName + '.' + fileExtension);
+                fileExtention = this.pickone(this.get(poolCollectionKey)[fileType]);
+                return (fileName + '.' + fileExtention);
             }
 
             throw new Error("Expect file type value to be 'raster', 'vector', '3d' or 'document' ");
         }
 
-        // Generate random file name if no extension options are passed
-        fileExtension = this.pickone(this.get(poolCollectionKey)[this.pickone(typeRange)]);
-        return (fileName + '.' + fileExtension);
+        // Generate random file name if no extenton options are passed
+        fileExtention = this.pickone(this.get(poolCollectionKey)[this.pickone(typeRange)]);
+        return (fileName + '.' + fileExtention);
     };
 
     var data = {
@@ -6571,7 +5092,7 @@ function isnan (val) {
                 "it": ["Adolfo", "Alberto", "Aldo", "Alessandro", "Alessio", "Alfredo", "Alvaro", "Andrea", "Angelo", "Angiolo", "Antonino", "Antonio", "Attilio", "Benito", "Bernardo", "Bruno", "Carlo", "Cesare", "Christian", "Claudio", "Corrado", "Cosimo", "Cristian", "Cristiano", "Daniele", "Dario", "David", "Davide", "Diego", "Dino", "Domenico", "Duccio", "Edoardo", "Elia", "Elio", "Emanuele", "Emiliano", "Emilio", "Enrico", "Enzo", "Ettore", "Fabio", "Fabrizio", "Federico", "Ferdinando", "Fernando", "Filippo", "Francesco", "Franco", "Gabriele", "Giacomo", "Giampaolo", "Giampiero", "Giancarlo", "Gianfranco", "Gianluca", "Gianmarco", "Gianni", "Gino", "Giorgio", "Giovanni", "Giuliano", "Giulio", "Giuseppe", "Graziano", "Gregorio", "Guido", "Iacopo", "Jacopo", "Lapo", "Leonardo", "Lorenzo", "Luca", "Luciano", "Luigi", "Manuel", "Marcello", "Marco", "Marino", "Mario", "Massimiliano", "Massimo", "Matteo", "Mattia", "Maurizio", "Mauro", "Michele", "Mirko", "Mohamed", "Nello", "Neri", "Niccolò", "Nicola", "Osvaldo", "Otello", "Paolo", "Pier Luigi", "Piero", "Pietro", "Raffaele", "Remo", "Renato", "Renzo", "Riccardo", "Roberto", "Rolando", "Romano", "Salvatore", "Samuele", "Sandro", "Sergio", "Silvano", "Simone", "Stefano", "Thomas", "Tommaso", "Ubaldo", "Ugo", "Umberto", "Valerio", "Valter", "Vasco", "Vincenzo", "Vittorio"]
             },
             "female": {
-                "en": ["Mary", "Emma", "Elizabeth", "Minnie", "Margaret", "Ida", "Alice", "Bertha", "Sarah", "Annie", "Clara", "Ella", "Florence", "Cora", "Martha", "Laura", "Nellie", "Grace", "Carrie", "Maude", "Mabel", "Bessie", "Jennie", "Gertrude", "Julia", "Hattie", "Edith", "Mattie", "Rose", "Catherine", "Lillian", "Ada", "Lillie", "Helen", "Jessie", "Louise", "Ethel", "Lula", "Myrtle", "Eva", "Frances", "Lena", "Lucy", "Edna", "Maggie", "Pearl", "Daisy", "Fannie", "Josephine", "Dora", "Rosa", "Katherine", "Agnes", "Marie", "Nora", "May", "Mamie", "Blanche", "Stella", "Ellen", "Nancy", "Effie", "Sallie", "Nettie", "Della", "Lizzie", "Flora", "Susie", "Maud", "Mae", "Etta", "Harriet", "Sadie", "Caroline", "Katie", "Lydia", "Elsie", "Kate", "Susan", "Mollie", "Alma", "Addie", "Georgia", "Eliza", "Lulu", "Nannie", "Lottie", "Amanda", "Belle", "Charlotte", "Rebecca", "Ruth", "Viola", "Olive", "Amelia", "Hannah", "Jane", "Virginia", "Emily", "Matilda", "Irene", "Kathryn", "Esther", "Willie", "Henrietta", "Ollie", "Amy", "Rachel", "Sara", "Estella", "Theresa", "Augusta", "Ora", "Pauline", "Josie", "Lola", "Sophia", "Leona", "Anne", "Mildred", "Ann", "Beulah", "Callie", "Lou", "Delia", "Eleanor", "Barbara", "Iva", "Louisa", "Maria", "Mayme", "Evelyn", "Estelle", "Nina", "Betty", "Marion", "Bettie", "Dorothy", "Luella", "Inez", "Lela", "Rosie", "Allie", "Millie", "Janie", "Cornelia", "Victoria", "Ruby", "Winifred", "Alta", "Celia", "Christine", "Beatrice", "Birdie", "Harriett", "Mable", "Myra", "Sophie", "Tillie", "Isabel", "Sylvia", "Carolyn", "Isabelle", "Leila", "Sally", "Ina", "Essie", "Bertie", "Nell", "Alberta", "Katharine", "Lora", "Rena", "Mina", "Rhoda", "Mathilda", "Abbie", "Eula", "Dollie", "Hettie", "Eunice", "Fanny", "Ola", "Lenora", "Adelaide", "Christina", "Lelia", "Nelle", "Sue", "Johanna", "Lilly", "Lucinda", "Minerva", "Lettie", "Roxie", "Cynthia", "Helena", "Hilda", "Hulda", "Bernice", "Genevieve", "Jean", "Cordelia", "Marian", "Francis", "Jeanette", "Adeline", "Gussie", "Leah", "Lois", "Lura", "Mittie", "Hallie", "Isabella", "Olga", "Phoebe", "Teresa", "Hester", "Lida", "Lina", "Winnie", "Claudia", "Marguerite", "Vera", "Cecelia", "Bess", "Emilie", "Rosetta", "Verna", "Myrtie", "Cecilia", "Elva", "Olivia", "Ophelia", "Georgie", "Elnora", "Violet", "Adele", "Lily", "Linnie", "Loretta", "Madge", "Polly", "Virgie", "Eugenia", "Lucile", "Lucille", "Mabelle", "Rosalie"],
+                "en": ["Mary", "Emma", "Elizabeth", "Minnie", "Margaret", "Ida", "Alice", "Bertha", "Sarah", "Annie", "Clara", "Ella", "Florence", "Cora", "Martha", "Laura", "Nellie", "Grace", "Carrie", "Maude", "Mabel", "Bessie", "Jennie", "Gertrude", "Julia", "Hattie", "Edith", "Mattie", "Rose", "Catherine", "Lillian", "Ada", "Lillie", "Helen", "Jessie", "Louise", "Ethel", "Lula", "Myrtle", "Eva", "Frances", "Lena", "Lucy", "Edna", "Maggie", "Pearl", "Daisy", "Fannie", "Josephine", "Dora", "Rosa", "Katherine", "Agnes", "Marie", "Nora", "May", "Mamie", "Blanche", "Stella", "Ellen", "Nancy", "Effie", "Sallie", "Nettie", "Della", "Lizzie", "Flora", "Susie", "Maud", "Mae", "Etta", "Harriet", "Sadie", "Caroline", "Katie", "Lydia", "Elsie", "Kate", "Susan", "Mollie", "Alma", "Addie", "Georgia", "Eliza", "Lulu", "Nannie", "Lottie", "Amanda", "Belle", "Charlotte", "Rebecca", "Ruth", "Viola", "Olive", "Amelia", "Hannah", "Jane", "Virginia", "Emily", "Matilda", "Irene", "Kathryn", "Esther", "Willie", "Henrietta", "Ollie", "Amy", "Rachel", "Sara", "Estella", "Theresa", "Augusta", "Ora", "Pauline", "Josie", "Lola", "Sophia", "Leona", "Anne", "Mildred", "Ann", "Beulah", "Callie", "Lou", "Delia", "Eleanor", "Barbara", "Iva", "Louisa", "Maria", "Mayme", "Evelyn", "Estelle", "Nina", "Betty", "Marion", "Bettie", "Dorothy", "Luella", "Inez", "Lela", "Rosie", "Allie", "Millie", "Janie", "Cornelia", "Victoria", "Ruby", "Winifred", "Alta", "Celia", "Christine", "Beatrice", "Birdie", "Harriett", "Mable", "Myra", "Sophie", "Tillie", "Isabel", "Sylvia", "Carolyn", "Isabelle", "Leila", "Sally", "Ina", "Essie", "Bertie", "Nell", "Alberta", "Katharine", "Lora", "Rena", "Mina", "Rhoda", "Mathilda", "Abbie", "Eula", "Dollie", "Hettie", "Eunice", "Fanny", "Ola", "Lenora", "Adelaide", "Christina", "Lelia", "Nelle", "Sue", "Johanna", "Lilly", "Lucinda", "Minerva", "Lettie", "Roxie", "Cynthia", "Helena", "Hilda", "Hulda", "Bernice", "Genevieve", "Jean", "Cordelia", "Marian", "Francis", "Jeanette", "Adeline", "Gussie", "Leah", "Lois", "Lura", "Mittie", "Hallie", "Isabella", "Olga", "Phoebe", "Teresa", "Hester", "Lida", "Lina", "Winnie", "Claudia", "Marguerite", "Vera", "Cecelia", "Bess", "Emilie", "John", "Rosetta", "Verna", "Myrtie", "Cecilia", "Elva", "Olivia", "Ophelia", "Georgie", "Elnora", "Violet", "Adele", "Lily", "Linnie", "Loretta", "Madge", "Polly", "Virgie", "Eugenia", "Lucile", "Lucille", "Mabelle", "Rosalie"],
                 // Data taken from http://www.dati.gov.it/dataset/comune-di-firenze_0162
                 "it": ["Ada", "Adriana", "Alessandra", "Alessia", "Alice", "Angela", "Anna", "Anna Maria", "Annalisa", "Annita", "Annunziata", "Antonella", "Arianna", "Asia", "Assunta", "Aurora", "Barbara", "Beatrice", "Benedetta", "Bianca", "Bruna", "Camilla", "Carla", "Carlotta", "Carmela", "Carolina", "Caterina", "Catia", "Cecilia", "Chiara", "Cinzia", "Clara", "Claudia", "Costanza", "Cristina", "Daniela", "Debora", "Diletta", "Dina", "Donatella", "Elena", "Eleonora", "Elisa", "Elisabetta", "Emanuela", "Emma", "Eva", "Federica", "Fernanda", "Fiorella", "Fiorenza", "Flora", "Franca", "Francesca", "Gabriella", "Gaia", "Gemma", "Giada", "Gianna", "Gina", "Ginevra", "Giorgia", "Giovanna", "Giulia", "Giuliana", "Giuseppa", "Giuseppina", "Grazia", "Graziella", "Greta", "Ida", "Ilaria", "Ines", "Iolanda", "Irene", "Irma", "Isabella", "Jessica", "Laura", "Leda", "Letizia", "Licia", "Lidia", "Liliana", "Lina", "Linda", "Lisa", "Livia", "Loretta", "Luana", "Lucia", "Luciana", "Lucrezia", "Luisa", "Manuela", "Mara", "Marcella", "Margherita", "Maria", "Maria Cristina", "Maria Grazia", "Maria Luisa", "Maria Pia", "Maria Teresa", "Marina", "Marisa", "Marta", "Martina", "Marzia", "Matilde", "Melissa", "Michela", "Milena", "Mirella", "Monica", "Natalina", "Nella", "Nicoletta", "Noemi", "Olga", "Paola", "Patrizia", "Piera", "Pierina", "Raffaella", "Rebecca", "Renata", "Rina", "Rita", "Roberta", "Rosa", "Rosanna", "Rossana", "Rossella", "Sabrina", "Sandra", "Sara", "Serena", "Silvana", "Silvia", "Simona", "Simonetta", "Sofia", "Sonia", "Stefania", "Susanna", "Teresa", "Tina", "Tiziana", "Tosca", "Valentina", "Valeria", "Vanda", "Vanessa", "Vanna", "Vera", "Veronica", "Vilma", "Viola", "Virginia", "Vittoria"]
             }
@@ -6590,9 +5111,6 @@ function isnan (val) {
             // Data taken from http://www.downloadexcelfiles.com/gb_en/download-excel-file-list-counties-uk
             "uk": [
                 {name: 'Bath and North East Somerset'},
-                {name: 'Aberdeenshire'},
-                {name: 'Anglesey'},
-                {name: 'Angus'},
                 {name: 'Bedford'},
                 {name: 'Blackburn with Darwen'},
                 {name: 'Blackpool'},
@@ -6602,49 +5120,28 @@ function isnan (val) {
                 {name: 'Bristol'},
                 {name: 'Buckinghamshire'},
                 {name: 'Cambridgeshire'},
-                {name: 'Carmarthenshire'},
                 {name: 'Central Bedfordshire'},
-                {name: 'Ceredigion'},
                 {name: 'Cheshire East'},
                 {name: 'Cheshire West and Chester'},
-                {name: 'Clackmannanshire'},
-                {name: 'Conwy'},
                 {name: 'Cornwall'},
-                {name: 'County Antrim'},
-                {name: 'County Armagh'},
-                {name: 'County Down'},
                 {name: 'County Durham'},
-                {name: 'County Fermanagh'},
-                {name: 'County Londonderry'},
-                {name: 'County Tyrone'},
                 {name: 'Cumbria'},
                 {name: 'Darlington'},
-                {name: 'Denbighshire'},
                 {name: 'Derby'},
                 {name: 'Derbyshire'},
                 {name: 'Devon'},
                 {name: 'Dorset'},
-                {name: 'Dumfries and Galloway'},
-                {name: 'Dundee'},
-                {name: 'East Lothian'},
                 {name: 'East Riding of Yorkshire'},
                 {name: 'East Sussex'},
-                {name: 'Edinburgh?'},
                 {name: 'Essex'},
-                {name: 'Falkirk'},
-                {name: 'Fife'},
-                {name: 'Flintshire'},
                 {name: 'Gloucestershire'},
                 {name: 'Greater London'},
                 {name: 'Greater Manchester'},
-                {name: 'Gwent'},
-                {name: 'Gwynedd'},
                 {name: 'Halton'},
                 {name: 'Hampshire'},
                 {name: 'Hartlepool'},
                 {name: 'Herefordshire'},
                 {name: 'Hertfordshire'},
-                {name: 'Highlands'},
                 {name: 'Hull'},
                 {name: 'Isle of Wight'},
                 {name: 'Isles of Scilly'},
@@ -6653,15 +5150,11 @@ function isnan (val) {
                 {name: 'Leicester'},
                 {name: 'Leicestershire'},
                 {name: 'Lincolnshire'},
-                {name: 'Lothian'},
                 {name: 'Luton'},
                 {name: 'Medway'},
                 {name: 'Merseyside'},
-                {name: 'Mid Glamorgan'},
                 {name: 'Middlesbrough'},
                 {name: 'Milton Keynes'},
-                {name: 'Monmouthshire'},
-                {name: 'Moray'},
                 {name: 'Norfolk'},
                 {name: 'North East Lincolnshire'},
                 {name: 'North Lincolnshire'},
@@ -6672,30 +5165,23 @@ function isnan (val) {
                 {name: 'Nottingham'},
                 {name: 'Nottinghamshire'},
                 {name: 'Oxfordshire'},
-                {name: 'Pembrokeshire'},
-                {name: 'Perth and Kinross'},
                 {name: 'Peterborough'},
                 {name: 'Plymouth'},
                 {name: 'Poole'},
                 {name: 'Portsmouth'},
-                {name: 'Powys'},
                 {name: 'Reading'},
                 {name: 'Redcar and Cleveland'},
                 {name: 'Rutland'},
-                {name: 'Scottish Borders'},
                 {name: 'Shropshire'},
                 {name: 'Slough'},
                 {name: 'Somerset'},
-                {name: 'South Glamorgan'},
                 {name: 'South Gloucestershire'},
                 {name: 'South Yorkshire'},
                 {name: 'Southampton'},
                 {name: 'Southend-on-Sea'},
                 {name: 'Staffordshire'},
-                {name: 'Stirlingshire'},
                 {name: 'Stockton-on-Tees'},
                 {name: 'Stoke-on-Trent'},
-                {name: 'Strathclyde'},
                 {name: 'Suffolk'},
                 {name: 'Surrey'},
                 {name: 'Swindon'},
@@ -6706,17 +5192,13 @@ function isnan (val) {
                 {name: 'Warrington'},
                 {name: 'Warwickshire'},
                 {name: 'West Berkshire'},
-                {name: 'West Glamorgan'},
-                {name: 'West Lothian'},
                 {name: 'West Midlands'},
                 {name: 'West Sussex'},
                 {name: 'West Yorkshire'},
-                {name: 'Western Isles'},
                 {name: 'Wiltshire'},
                 {name: 'Windsor and Maidenhead'},
                 {name: 'Wokingham'},
                 {name: 'Worcestershire'},
-                {name: 'Wrexham'},
                 {name: 'York'}]
 				},
         provinces: {
@@ -7252,27 +5734,6 @@ function isnan (val) {
                 { name: 'Viale', abbreviation: 'V.le' },
                 { name: 'Vicinale', abbreviation: 'Vic.le' },
                 { name: 'Vicolo', abbreviation: 'Vic.' }
-            ],
-            'uk' : [
-                {name: 'Avenue', abbreviation: 'Ave'},
-                {name: 'Close', abbreviation: 'Cl'},
-                {name: 'Court', abbreviation: 'Ct'},
-                {name: 'Crescent', abbreviation: 'Cr'},
-                {name: 'Drive', abbreviation: 'Dr'},
-                {name: 'Garden', abbreviation: 'Gdn'},
-                {name: 'Gardens', abbreviation: 'Gdns'},
-                {name: 'Green', abbreviation: 'Gn'},
-                {name: 'Grove', abbreviation: 'Gr'},
-                {name: 'Lane', abbreviation: 'Ln'},
-                {name: 'Mount', abbreviation: 'Mt'},
-                {name: 'Place', abbreviation: 'Pl'},
-                {name: 'Park', abbreviation: 'Pk'},
-                {name: 'Ridge', abbreviation: 'Rdg'},
-                {name: 'Road', abbreviation: 'Rd'},
-                {name: 'Square', abbreviation: 'Sq'},
-                {name: 'Street', abbreviation: 'St'},
-                {name: 'Terrace', abbreviation: 'Ter'},
-                {name: 'Valley', abbreviation: 'Val'}
             ]
         },
 
@@ -8842,399 +7303,7 @@ function isnan (val) {
                       "Pacific/Apia"
                     ]
                   }
-                ],
-        //List source: http://answers.google.com/answers/threadview/id/589312.html
-        profession: [
-            "Airline Pilot",
-            "Academic Team",
-            "Accountant",
-            "Account Executive",
-            "Actor",
-            "Actuary",
-            "Acquisition Analyst",
-            "Administrative Asst.",
-            "Administrative Analyst",
-            "Administrator",
-            "Advertising Director",
-            "Aerospace Engineer",
-            "Agent",
-            "Agricultural Inspector",
-            "Agricultural Scientist",
-            "Air Traffic Controller",
-            "Animal Trainer",
-            "Anthropologist",
-            "Appraiser",
-            "Architect",
-            "Art Director",
-            "Artist",
-            "Astronomer",
-            "Athletic Coach",
-            "Auditor",
-            "Author",
-            "Baker",
-            "Banker",
-            "Bankruptcy Attorney",
-            "Benefits Manager",
-            "Biologist",
-            "Bio-feedback Specialist",
-            "Biomedical Engineer",
-            "Biotechnical Researcher",
-            "Broadcaster",
-            "Broker",
-            "Building Manager",
-            "Building Contractor",
-            "Building Inspector",
-            "Business Analyst",
-            "Business Planner",
-            "Business Manager",
-            "Buyer",
-            "Call Center Manager",
-            "Career Counselor",
-            "Cash Manager",
-            "Ceramic Engineer",
-            "Chief Executive Officer",
-            "Chief Operation Officer",
-            "Chef",
-            "Chemical Engineer",
-            "Chemist",
-            "Child Care Manager",
-            "Chief Medical Officer",
-            "Chiropractor",
-            "Cinematographer",
-            "City Housing Manager",
-            "City Manager",
-            "Civil Engineer",
-            "Claims Manager",
-            "Clinical Research Assistant",
-            "Collections Manager.",
-            "Compliance Manager",
-            "Comptroller",
-            "Computer Manager",
-            "Commercial Artist",
-            "Communications Affairs Director",
-            "Communications Director",
-            "Communications Engineer",
-            "Compensation Analyst",
-            "Computer Programmer",
-            "Computer Ops. Manager",
-            "Computer Engineer",
-            "Computer Operator",
-            "Computer Graphics Specialist",
-            "Construction Engineer",
-            "Construction Manager",
-            "Consultant",
-            "Consumer Relations Manager",
-            "Contract Administrator",
-            "Copyright Attorney",
-            "Copywriter",
-            "Corporate Planner",
-            "Corrections Officer",
-            "Cosmetologist",
-            "Credit Analyst",
-            "Cruise Director",
-            "Chief Information Officer",
-            "Chief Technology Officer",
-            "Customer Service Manager",
-            "Cryptologist",
-            "Dancer",
-            "Data Security Manager",
-            "Database Manager",
-            "Day Care Instructor",
-            "Dentist",
-            "Designer",
-            "Design Engineer",
-            "Desktop Publisher",
-            "Developer",
-            "Development Officer",
-            "Diamond Merchant",
-            "Dietitian",
-            "Direct Marketer",
-            "Director",
-            "Distribution Manager",
-            "Diversity Manager",
-            "Economist",
-            "EEO Compliance Manager",
-            "Editor",
-            "Education Adminator",
-            "Electrical Engineer",
-            "Electro Optical Engineer",
-            "Electronics Engineer",
-            "Embassy Management",
-            "Employment Agent",
-            "Engineer Technician",
-            "Entrepreneur",
-            "Environmental Analyst",
-            "Environmental Attorney",
-            "Environmental Engineer",
-            "Environmental Specialist",
-            "Escrow Officer",
-            "Estimator",
-            "Executive Assistant",
-            "Executive Director",
-            "Executive Recruiter",
-            "Facilities Manager",
-            "Family Counselor",
-            "Fashion Events Manager",
-            "Fashion Merchandiser",
-            "Fast Food Manager",
-            "Film Producer",
-            "Film Production Assistant",
-            "Financial Analyst",
-            "Financial Planner",
-            "Financier",
-            "Fine Artist",
-            "Wildlife Specialist",
-            "Fitness Consultant",
-            "Flight Attendant",
-            "Flight Engineer",
-            "Floral Designer",
-            "Food & Beverage Director",
-            "Food Service Manager",
-            "Forestry Technician",
-            "Franchise Management",
-            "Franchise Sales",
-            "Fraud Investigator",
-            "Freelance Writer",
-            "Fund Raiser",
-            "General Manager",
-            "Geologist",
-            "General Counsel",
-            "Geriatric Specialist",
-            "Gerontologist",
-            "Glamour Photographer",
-            "Golf Club Manager",
-            "Gourmet Chef",
-            "Graphic Designer",
-            "Grounds Keeper",
-            "Hazardous Waste Manager",
-            "Health Care Manager",
-            "Health Therapist",
-            "Health Service Administrator",
-            "Hearing Officer",
-            "Home Economist",
-            "Horticulturist",
-            "Hospital Administrator",
-            "Hotel Manager",
-            "Human Resources Manager",
-            "Importer",
-            "Industrial Designer",
-            "Industrial Engineer",
-            "Information Director",
-            "Inside Sales",
-            "Insurance Adjuster",
-            "Interior Decorator",
-            "Internal Controls Director",
-            "International Acct.",
-            "International Courier",
-            "International Lawyer",
-            "Interpreter",
-            "Investigator",
-            "Investment Banker",
-            "Investment Manager",
-            "IT Architect",
-            "IT Project Manager",
-            "IT Systems Analyst",
-            "Jeweler",
-            "Joint Venture Manager",
-            "Journalist",
-            "Labor Negotiator",
-            "Labor Organizer",
-            "Labor Relations Manager",
-            "Lab Services Director",
-            "Lab Technician",
-            "Land Developer",
-            "Landscape Architect",
-            "Law Enforcement Officer",
-            "Lawyer",
-            "Lead Software Engineer",
-            "Lead Software Test Engineer",
-            "Leasing Manager",
-            "Legal Secretary",
-            "Library Manager",
-            "Litigation Attorney",
-            "Loan Officer",
-            "Lobbyist",
-            "Logistics Manager",
-            "Maintenance Manager",
-            "Management Consultant",
-            "Managed Care Director",
-            "Managing Partner",
-            "Manufacturing Director",
-            "Manpower Planner",
-            "Marine Biologist",
-            "Market Res. Analyst",
-            "Marketing Director",
-            "Materials Manager",
-            "Mathematician",
-            "Membership Chairman",
-            "Mechanic",
-            "Mechanical Engineer",
-            "Media Buyer",
-            "Medical Investor",
-            "Medical Secretary",
-            "Medical Technician",
-            "Mental Health Counselor",
-            "Merchandiser",
-            "Metallurgical Engineering",
-            "Meteorologist",
-            "Microbiologist",
-            "MIS Manager",
-            "Motion Picture Director",
-            "Multimedia Director",
-            "Musician",
-            "Network Administrator",
-            "Network Specialist",
-            "Network Operator",
-            "New Product Manager",
-            "Novelist",
-            "Nuclear Engineer",
-            "Nuclear Specialist",
-            "Nutritionist",
-            "Nursing Administrator",
-            "Occupational Therapist",
-            "Oceanographer",
-            "Office Manager",
-            "Operations Manager",
-            "Operations Research Director",
-            "Optical Technician",
-            "Optometrist",
-            "Organizational Development Manager",
-            "Outplacement Specialist",
-            "Paralegal",
-            "Park Ranger",
-            "Patent Attorney",
-            "Payroll Specialist",
-            "Personnel Specialist",
-            "Petroleum Engineer",
-            "Pharmacist",
-            "Photographer",
-            "Physical Therapist",
-            "Physician",
-            "Physician Assistant",
-            "Physicist",
-            "Planning Director",
-            "Podiatrist",
-            "Political Analyst",
-            "Political Scientist",
-            "Politician",
-            "Portfolio Manager",
-            "Preschool Management",
-            "Preschool Teacher",
-            "Principal",
-            "Private Banker",
-            "Private Investigator",
-            "Probation Officer",
-            "Process Engineer",
-            "Producer",
-            "Product Manager",
-            "Product Engineer",
-            "Production Engineer",
-            "Production Planner",
-            "Professional Athlete",
-            "Professional Coach",
-            "Professor",
-            "Project Engineer",
-            "Project Manager",
-            "Program Manager",
-            "Property Manager",
-            "Public Administrator",
-            "Public Safety Director",
-            "PR Specialist",
-            "Publisher",
-            "Purchasing Agent",
-            "Publishing Director",
-            "Quality Assurance Specialist",
-            "Quality Control Engineer",
-            "Quality Control Inspector",
-            "Radiology Manager",
-            "Railroad Engineer",
-            "Real Estate Broker",
-            "Recreational Director",
-            "Recruiter",
-            "Redevelopment Specialist",
-            "Regulatory Affairs Manager",
-            "Registered Nurse",
-            "Rehabilitation Counselor",
-            "Relocation Manager",
-            "Reporter",
-            "Research Specialist",
-            "Restaurant Manager",
-            "Retail Store Manager",
-            "Risk Analyst",
-            "Safety Engineer",
-            "Sales Engineer",
-            "Sales Trainer",
-            "Sales Promotion Manager",
-            "Sales Representative",
-            "Sales Manager",
-            "Service Manager",
-            "Sanitation Engineer",
-            "Scientific Programmer",
-            "Scientific Writer",
-            "Securities Analyst",
-            "Security Consultant",
-            "Security Director",
-            "Seminar Presenter",
-            "Ship's Officer",
-            "Singer",
-            "Social Director",
-            "Social Program Planner",
-            "Social Research",
-            "Social Scientist",
-            "Social Worker",
-            "Sociologist",
-            "Software Developer",
-            "Software Engineer",
-            "Software Test Engineer",
-            "Soil Scientist",
-            "Special Events Manager",
-            "Special Education Teacher",
-            "Special Projects Director",
-            "Speech Pathologist",
-            "Speech Writer",
-            "Sports Event Manager",
-            "Statistician",
-            "Store Manager",
-            "Strategic Alliance Director",
-            "Strategic Planning Director",
-            "Stress Reduction Specialist",
-            "Stockbroker",
-            "Surveyor",
-            "Structural Engineer",
-            "Superintendent",
-            "Supply Chain Director",
-            "System Engineer",
-            "Systems Analyst",
-            "Systems Programmer",
-            "System Administrator",
-            "Tax Specialist",
-            "Teacher",
-            "Technical Support Specialist",
-            "Technical Illustrator",
-            "Technical Writer",
-            "Technology Director",
-            "Telecom Analyst",
-            "Telemarketer",
-            "Theatrical Director",
-            "Title Examiner",
-            "Tour Escort",
-            "Tour Guide Director",
-            "Traffic Manager",
-            "Trainer Translator",
-            "Transportation Manager",
-            "Travel Agent",
-            "Treasurer",
-            "TV Programmer",
-            "Underwriter",
-            "Union Representative",
-            "University Administrator",
-            "University Dean",
-            "Urban Planner",
-            "Veterinarian",
-            "Vendor Relations Director",
-            "Viticulturist",
-            "Warehouse Manager"
-        ]
+                ]
     };
 
     var o_hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -9821,7 +7890,7 @@ function isnan (val) {
 })();
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":9}],11:[function(require,module,exports){
+},{"buffer":19}],17:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -9907,14 +7976,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],12:[function(require,module,exports){
-var toString = {}.toString;
-
-module.exports = Array.isArray || function (arr) {
-  return toString.call(arr) == '[object Array]';
-};
-
-},{}],13:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 //     Underscore.js 1.8.3
 //     http://underscorejs.org
 //     (c) 2009-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
@@ -11464,5 +9526,1721 @@ module.exports = Array.isArray || function (arr) {
   }
 }.call(this));
 
-},{}]},{},[5])(5)
+},{}],19:[function(require,module,exports){
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <https://feross.org>
+ * @license  MIT
+ */
+/* eslint-disable no-proto */
+
+'use strict'
+
+var base64 = require('base64-js')
+var ieee754 = require('ieee754')
+
+exports.Buffer = Buffer
+exports.SlowBuffer = SlowBuffer
+exports.INSPECT_MAX_BYTES = 50
+
+var K_MAX_LENGTH = 0x7fffffff
+exports.kMaxLength = K_MAX_LENGTH
+
+/**
+ * If `Buffer.TYPED_ARRAY_SUPPORT`:
+ *   === true    Use Uint8Array implementation (fastest)
+ *   === false   Print warning and recommend using `buffer` v4.x which has an Object
+ *               implementation (most compatible, even IE6)
+ *
+ * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
+ * Opera 11.6+, iOS 4.2+.
+ *
+ * We report that the browser does not support typed arrays if the are not subclassable
+ * using __proto__. Firefox 4-29 lacks support for adding new properties to `Uint8Array`
+ * (See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438). IE 10 lacks support
+ * for __proto__ and has a buggy typed array implementation.
+ */
+Buffer.TYPED_ARRAY_SUPPORT = typedArraySupport()
+
+if (!Buffer.TYPED_ARRAY_SUPPORT && typeof console !== 'undefined' &&
+    typeof console.error === 'function') {
+  console.error(
+    'This browser lacks typed array (Uint8Array) support which is required by ' +
+    '`buffer` v5.x. Use `buffer` v4.x if you require old browser support.'
+  )
+}
+
+function typedArraySupport () {
+  // Can typed array instances can be augmented?
+  try {
+    var arr = new Uint8Array(1)
+    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
+    return arr.foo() === 42
+  } catch (e) {
+    return false
+  }
+}
+
+function createBuffer (length) {
+  if (length > K_MAX_LENGTH) {
+    throw new RangeError('Invalid typed array length')
+  }
+  // Return an augmented `Uint8Array` instance
+  var buf = new Uint8Array(length)
+  buf.__proto__ = Buffer.prototype
+  return buf
+}
+
+/**
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
+ *
+ * The `Uint8Array` prototype remains unmodified.
+ */
+
+function Buffer (arg, encodingOrOffset, length) {
+  // Common case.
+  if (typeof arg === 'number') {
+    if (typeof encodingOrOffset === 'string') {
+      throw new Error(
+        'If encoding is specified then the first argument must be a string'
+      )
+    }
+    return allocUnsafe(arg)
+  }
+  return from(arg, encodingOrOffset, length)
+}
+
+// Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+if (typeof Symbol !== 'undefined' && Symbol.species &&
+    Buffer[Symbol.species] === Buffer) {
+  Object.defineProperty(Buffer, Symbol.species, {
+    value: null,
+    configurable: true,
+    enumerable: false,
+    writable: false
+  })
+}
+
+Buffer.poolSize = 8192 // not used by this implementation
+
+function from (value, encodingOrOffset, length) {
+  if (typeof value === 'number') {
+    throw new TypeError('"value" argument must not be a number')
+  }
+
+  if (isArrayBuffer(value)) {
+    return fromArrayBuffer(value, encodingOrOffset, length)
+  }
+
+  if (typeof value === 'string') {
+    return fromString(value, encodingOrOffset)
+  }
+
+  return fromObject(value)
+}
+
+/**
+ * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+ * if value is a number.
+ * Buffer.from(str[, encoding])
+ * Buffer.from(array)
+ * Buffer.from(buffer)
+ * Buffer.from(arrayBuffer[, byteOffset[, length]])
+ **/
+Buffer.from = function (value, encodingOrOffset, length) {
+  return from(value, encodingOrOffset, length)
+}
+
+// Note: Change prototype *after* Buffer.from is defined to workaround Chrome bug:
+// https://github.com/feross/buffer/pull/148
+Buffer.prototype.__proto__ = Uint8Array.prototype
+Buffer.__proto__ = Uint8Array
+
+function assertSize (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('"size" argument must be a number')
+  } else if (size < 0) {
+    throw new RangeError('"size" argument must not be negative')
+  }
+}
+
+function alloc (size, fill, encoding) {
+  assertSize(size)
+  if (size <= 0) {
+    return createBuffer(size)
+  }
+  if (fill !== undefined) {
+    // Only pay attention to encoding if it's a string. This
+    // prevents accidentally sending in a number that would
+    // be interpretted as a start offset.
+    return typeof encoding === 'string'
+      ? createBuffer(size).fill(fill, encoding)
+      : createBuffer(size).fill(fill)
+  }
+  return createBuffer(size)
+}
+
+/**
+ * Creates a new filled Buffer instance.
+ * alloc(size[, fill[, encoding]])
+ **/
+Buffer.alloc = function (size, fill, encoding) {
+  return alloc(size, fill, encoding)
+}
+
+function allocUnsafe (size) {
+  assertSize(size)
+  return createBuffer(size < 0 ? 0 : checked(size) | 0)
+}
+
+/**
+ * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+ * */
+Buffer.allocUnsafe = function (size) {
+  return allocUnsafe(size)
+}
+/**
+ * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+ */
+Buffer.allocUnsafeSlow = function (size) {
+  return allocUnsafe(size)
+}
+
+function fromString (string, encoding) {
+  if (typeof encoding !== 'string' || encoding === '') {
+    encoding = 'utf8'
+  }
+
+  if (!Buffer.isEncoding(encoding)) {
+    throw new TypeError('"encoding" must be a valid string encoding')
+  }
+
+  var length = byteLength(string, encoding) | 0
+  var buf = createBuffer(length)
+
+  var actual = buf.write(string, encoding)
+
+  if (actual !== length) {
+    // Writing a hex string, for example, that contains invalid characters will
+    // cause everything after the first invalid character to be ignored. (e.g.
+    // 'abxxcd' will be treated as 'ab')
+    buf = buf.slice(0, actual)
+  }
+
+  return buf
+}
+
+function fromArrayLike (array) {
+  var length = array.length < 0 ? 0 : checked(array.length) | 0
+  var buf = createBuffer(length)
+  for (var i = 0; i < length; i += 1) {
+    buf[i] = array[i] & 255
+  }
+  return buf
+}
+
+function fromArrayBuffer (array, byteOffset, length) {
+  if (byteOffset < 0 || array.byteLength < byteOffset) {
+    throw new RangeError('\'offset\' is out of bounds')
+  }
+
+  if (array.byteLength < byteOffset + (length || 0)) {
+    throw new RangeError('\'length\' is out of bounds')
+  }
+
+  var buf
+  if (byteOffset === undefined && length === undefined) {
+    buf = new Uint8Array(array)
+  } else if (length === undefined) {
+    buf = new Uint8Array(array, byteOffset)
+  } else {
+    buf = new Uint8Array(array, byteOffset, length)
+  }
+
+  // Return an augmented `Uint8Array` instance
+  buf.__proto__ = Buffer.prototype
+  return buf
+}
+
+function fromObject (obj) {
+  if (Buffer.isBuffer(obj)) {
+    var len = checked(obj.length) | 0
+    var buf = createBuffer(len)
+
+    if (buf.length === 0) {
+      return buf
+    }
+
+    obj.copy(buf, 0, 0, len)
+    return buf
+  }
+
+  if (obj) {
+    if (isArrayBufferView(obj) || 'length' in obj) {
+      if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
+        return createBuffer(0)
+      }
+      return fromArrayLike(obj)
+    }
+
+    if (obj.type === 'Buffer' && Array.isArray(obj.data)) {
+      return fromArrayLike(obj.data)
+    }
+  }
+
+  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
+}
+
+function checked (length) {
+  // Note: cannot use `length < K_MAX_LENGTH` here because that fails when
+  // length is NaN (which is otherwise coerced to zero.)
+  if (length >= K_MAX_LENGTH) {
+    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
+                         'size: 0x' + K_MAX_LENGTH.toString(16) + ' bytes')
+  }
+  return length | 0
+}
+
+function SlowBuffer (length) {
+  if (+length != length) { // eslint-disable-line eqeqeq
+    length = 0
+  }
+  return Buffer.alloc(+length)
+}
+
+Buffer.isBuffer = function isBuffer (b) {
+  return b != null && b._isBuffer === true
+}
+
+Buffer.compare = function compare (a, b) {
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
+    throw new TypeError('Arguments must be Buffers')
+  }
+
+  if (a === b) return 0
+
+  var x = a.length
+  var y = b.length
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i]
+      y = b[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+Buffer.isEncoding = function isEncoding (encoding) {
+  switch (String(encoding).toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'latin1':
+    case 'binary':
+    case 'base64':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      return true
+    default:
+      return false
+  }
+}
+
+Buffer.concat = function concat (list, length) {
+  if (!Array.isArray(list)) {
+    throw new TypeError('"list" argument must be an Array of Buffers')
+  }
+
+  if (list.length === 0) {
+    return Buffer.alloc(0)
+  }
+
+  var i
+  if (length === undefined) {
+    length = 0
+    for (i = 0; i < list.length; ++i) {
+      length += list[i].length
+    }
+  }
+
+  var buffer = Buffer.allocUnsafe(length)
+  var pos = 0
+  for (i = 0; i < list.length; ++i) {
+    var buf = list[i]
+    if (!Buffer.isBuffer(buf)) {
+      throw new TypeError('"list" argument must be an Array of Buffers')
+    }
+    buf.copy(buffer, pos)
+    pos += buf.length
+  }
+  return buffer
+}
+
+function byteLength (string, encoding) {
+  if (Buffer.isBuffer(string)) {
+    return string.length
+  }
+  if (isArrayBufferView(string) || isArrayBuffer(string)) {
+    return string.byteLength
+  }
+  if (typeof string !== 'string') {
+    string = '' + string
+  }
+
+  var len = string.length
+  if (len === 0) return 0
+
+  // Use a for loop to avoid recursion
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'ascii':
+      case 'latin1':
+      case 'binary':
+        return len
+      case 'utf8':
+      case 'utf-8':
+      case undefined:
+        return utf8ToBytes(string).length
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return len * 2
+      case 'hex':
+        return len >>> 1
+      case 'base64':
+        return base64ToBytes(string).length
+      default:
+        if (loweredCase) return utf8ToBytes(string).length // assume utf8
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+Buffer.byteLength = byteLength
+
+function slowToString (encoding, start, end) {
+  var loweredCase = false
+
+  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+  // property of a typed array.
+
+  // This behaves neither like String nor Uint8Array in that we set start/end
+  // to their upper/lower bounds if the value passed is out of range.
+  // undefined is handled specially as per ECMA-262 6th Edition,
+  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+  if (start === undefined || start < 0) {
+    start = 0
+  }
+  // Return early if start > this.length. Done here to prevent potential uint32
+  // coercion fail below.
+  if (start > this.length) {
+    return ''
+  }
+
+  if (end === undefined || end > this.length) {
+    end = this.length
+  }
+
+  if (end <= 0) {
+    return ''
+  }
+
+  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
+  end >>>= 0
+  start >>>= 0
+
+  if (end <= start) {
+    return ''
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  while (true) {
+    switch (encoding) {
+      case 'hex':
+        return hexSlice(this, start, end)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Slice(this, start, end)
+
+      case 'ascii':
+        return asciiSlice(this, start, end)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Slice(this, start, end)
+
+      case 'base64':
+        return base64Slice(this, start, end)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return utf16leSlice(this, start, end)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = (encoding + '').toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+// This property is used by `Buffer.isBuffer` (and the `is-buffer` npm package)
+// to detect a Buffer instance. It's not possible to use `instanceof Buffer`
+// reliably in a browserify context because there could be multiple different
+// copies of the 'buffer' package in use. This method works even for Buffer
+// instances that were created from another copy of the `buffer` package.
+// See: https://github.com/feross/buffer/issues/154
+Buffer.prototype._isBuffer = true
+
+function swap (b, n, m) {
+  var i = b[n]
+  b[n] = b[m]
+  b[m] = i
+}
+
+Buffer.prototype.swap16 = function swap16 () {
+  var len = this.length
+  if (len % 2 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 16-bits')
+  }
+  for (var i = 0; i < len; i += 2) {
+    swap(this, i, i + 1)
+  }
+  return this
+}
+
+Buffer.prototype.swap32 = function swap32 () {
+  var len = this.length
+  if (len % 4 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 32-bits')
+  }
+  for (var i = 0; i < len; i += 4) {
+    swap(this, i, i + 3)
+    swap(this, i + 1, i + 2)
+  }
+  return this
+}
+
+Buffer.prototype.swap64 = function swap64 () {
+  var len = this.length
+  if (len % 8 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 64-bits')
+  }
+  for (var i = 0; i < len; i += 8) {
+    swap(this, i, i + 7)
+    swap(this, i + 1, i + 6)
+    swap(this, i + 2, i + 5)
+    swap(this, i + 3, i + 4)
+  }
+  return this
+}
+
+Buffer.prototype.toString = function toString () {
+  var length = this.length
+  if (length === 0) return ''
+  if (arguments.length === 0) return utf8Slice(this, 0, length)
+  return slowToString.apply(this, arguments)
+}
+
+Buffer.prototype.equals = function equals (b) {
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (this === b) return true
+  return Buffer.compare(this, b) === 0
+}
+
+Buffer.prototype.inspect = function inspect () {
+  var str = ''
+  var max = exports.INSPECT_MAX_BYTES
+  if (this.length > 0) {
+    str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
+    if (this.length > max) str += ' ... '
+  }
+  return '<Buffer ' + str + '>'
+}
+
+Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
+  if (!Buffer.isBuffer(target)) {
+    throw new TypeError('Argument must be a Buffer')
+  }
+
+  if (start === undefined) {
+    start = 0
+  }
+  if (end === undefined) {
+    end = target ? target.length : 0
+  }
+  if (thisStart === undefined) {
+    thisStart = 0
+  }
+  if (thisEnd === undefined) {
+    thisEnd = this.length
+  }
+
+  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+    throw new RangeError('out of range index')
+  }
+
+  if (thisStart >= thisEnd && start >= end) {
+    return 0
+  }
+  if (thisStart >= thisEnd) {
+    return -1
+  }
+  if (start >= end) {
+    return 1
+  }
+
+  start >>>= 0
+  end >>>= 0
+  thisStart >>>= 0
+  thisEnd >>>= 0
+
+  if (this === target) return 0
+
+  var x = thisEnd - thisStart
+  var y = end - start
+  var len = Math.min(x, y)
+
+  var thisCopy = this.slice(thisStart, thisEnd)
+  var targetCopy = target.slice(start, end)
+
+  for (var i = 0; i < len; ++i) {
+    if (thisCopy[i] !== targetCopy[i]) {
+      x = thisCopy[i]
+      y = targetCopy[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+//
+// Arguments:
+// - buffer - a Buffer to search
+// - val - a string, Buffer, or number
+// - byteOffset - an index into `buffer`; will be clamped to an int32
+// - encoding - an optional encoding, relevant is val is a string
+// - dir - true for indexOf, false for lastIndexOf
+function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+  // Empty buffer means no match
+  if (buffer.length === 0) return -1
+
+  // Normalize byteOffset
+  if (typeof byteOffset === 'string') {
+    encoding = byteOffset
+    byteOffset = 0
+  } else if (byteOffset > 0x7fffffff) {
+    byteOffset = 0x7fffffff
+  } else if (byteOffset < -0x80000000) {
+    byteOffset = -0x80000000
+  }
+  byteOffset = +byteOffset  // Coerce to Number.
+  if (numberIsNaN(byteOffset)) {
+    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+    byteOffset = dir ? 0 : (buffer.length - 1)
+  }
+
+  // Normalize byteOffset: negative offsets start from the end of the buffer
+  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+  if (byteOffset >= buffer.length) {
+    if (dir) return -1
+    else byteOffset = buffer.length - 1
+  } else if (byteOffset < 0) {
+    if (dir) byteOffset = 0
+    else return -1
+  }
+
+  // Normalize val
+  if (typeof val === 'string') {
+    val = Buffer.from(val, encoding)
+  }
+
+  // Finally, search either indexOf (if dir is true) or lastIndexOf
+  if (Buffer.isBuffer(val)) {
+    // Special case: looking for empty string/buffer always fails
+    if (val.length === 0) {
+      return -1
+    }
+    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+  } else if (typeof val === 'number') {
+    val = val & 0xFF // Search for a byte value [0-255]
+    if (typeof Uint8Array.prototype.indexOf === 'function') {
+      if (dir) {
+        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
+      } else {
+        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
+      }
+    }
+    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
+  }
+
+  throw new TypeError('val must be string, number or Buffer')
+}
+
+function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
+  var indexSize = 1
+  var arrLength = arr.length
+  var valLength = val.length
+
+  if (encoding !== undefined) {
+    encoding = String(encoding).toLowerCase()
+    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
+        encoding === 'utf16le' || encoding === 'utf-16le') {
+      if (arr.length < 2 || val.length < 2) {
+        return -1
+      }
+      indexSize = 2
+      arrLength /= 2
+      valLength /= 2
+      byteOffset /= 2
+    }
+  }
+
+  function read (buf, i) {
+    if (indexSize === 1) {
+      return buf[i]
+    } else {
+      return buf.readUInt16BE(i * indexSize)
+    }
+  }
+
+  var i
+  if (dir) {
+    var foundIndex = -1
+    for (i = byteOffset; i < arrLength; i++) {
+      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+        if (foundIndex === -1) foundIndex = i
+        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+      } else {
+        if (foundIndex !== -1) i -= i - foundIndex
+        foundIndex = -1
+      }
+    }
+  } else {
+    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+    for (i = byteOffset; i >= 0; i--) {
+      var found = true
+      for (var j = 0; j < valLength; j++) {
+        if (read(arr, i + j) !== read(val, j)) {
+          found = false
+          break
+        }
+      }
+      if (found) return i
+    }
+  }
+
+  return -1
+}
+
+Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
+  return this.indexOf(val, byteOffset, encoding) !== -1
+}
+
+Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+}
+
+Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
+}
+
+function hexWrite (buf, string, offset, length) {
+  offset = Number(offset) || 0
+  var remaining = buf.length - offset
+  if (!length) {
+    length = remaining
+  } else {
+    length = Number(length)
+    if (length > remaining) {
+      length = remaining
+    }
+  }
+
+  // must be an even number of digits
+  var strLen = string.length
+  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
+
+  if (length > strLen / 2) {
+    length = strLen / 2
+  }
+  for (var i = 0; i < length; ++i) {
+    var parsed = parseInt(string.substr(i * 2, 2), 16)
+    if (numberIsNaN(parsed)) return i
+    buf[offset + i] = parsed
+  }
+  return i
+}
+
+function utf8Write (buf, string, offset, length) {
+  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+function asciiWrite (buf, string, offset, length) {
+  return blitBuffer(asciiToBytes(string), buf, offset, length)
+}
+
+function latin1Write (buf, string, offset, length) {
+  return asciiWrite(buf, string, offset, length)
+}
+
+function base64Write (buf, string, offset, length) {
+  return blitBuffer(base64ToBytes(string), buf, offset, length)
+}
+
+function ucs2Write (buf, string, offset, length) {
+  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+Buffer.prototype.write = function write (string, offset, length, encoding) {
+  // Buffer#write(string)
+  if (offset === undefined) {
+    encoding = 'utf8'
+    length = this.length
+    offset = 0
+  // Buffer#write(string, encoding)
+  } else if (length === undefined && typeof offset === 'string') {
+    encoding = offset
+    length = this.length
+    offset = 0
+  // Buffer#write(string, offset[, length][, encoding])
+  } else if (isFinite(offset)) {
+    offset = offset >>> 0
+    if (isFinite(length)) {
+      length = length >>> 0
+      if (encoding === undefined) encoding = 'utf8'
+    } else {
+      encoding = length
+      length = undefined
+    }
+  } else {
+    throw new Error(
+      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
+    )
+  }
+
+  var remaining = this.length - offset
+  if (length === undefined || length > remaining) length = remaining
+
+  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
+    throw new RangeError('Attempt to write outside buffer bounds')
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'hex':
+        return hexWrite(this, string, offset, length)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Write(this, string, offset, length)
+
+      case 'ascii':
+        return asciiWrite(this, string, offset, length)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Write(this, string, offset, length)
+
+      case 'base64':
+        // Warning: maxLength not taken into account in base64Write
+        return base64Write(this, string, offset, length)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return ucs2Write(this, string, offset, length)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+Buffer.prototype.toJSON = function toJSON () {
+  return {
+    type: 'Buffer',
+    data: Array.prototype.slice.call(this._arr || this, 0)
+  }
+}
+
+function base64Slice (buf, start, end) {
+  if (start === 0 && end === buf.length) {
+    return base64.fromByteArray(buf)
+  } else {
+    return base64.fromByteArray(buf.slice(start, end))
+  }
+}
+
+function utf8Slice (buf, start, end) {
+  end = Math.min(buf.length, end)
+  var res = []
+
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
+    }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
+  }
+
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
+}
+
+function asciiSlice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i] & 0x7F)
+  }
+  return ret
+}
+
+function latin1Slice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i])
+  }
+  return ret
+}
+
+function hexSlice (buf, start, end) {
+  var len = buf.length
+
+  if (!start || start < 0) start = 0
+  if (!end || end < 0 || end > len) end = len
+
+  var out = ''
+  for (var i = start; i < end; ++i) {
+    out += toHex(buf[i])
+  }
+  return out
+}
+
+function utf16leSlice (buf, start, end) {
+  var bytes = buf.slice(start, end)
+  var res = ''
+  for (var i = 0; i < bytes.length; i += 2) {
+    res += String.fromCharCode(bytes[i] + (bytes[i + 1] * 256))
+  }
+  return res
+}
+
+Buffer.prototype.slice = function slice (start, end) {
+  var len = this.length
+  start = ~~start
+  end = end === undefined ? len : ~~end
+
+  if (start < 0) {
+    start += len
+    if (start < 0) start = 0
+  } else if (start > len) {
+    start = len
+  }
+
+  if (end < 0) {
+    end += len
+    if (end < 0) end = 0
+  } else if (end > len) {
+    end = len
+  }
+
+  if (end < start) end = start
+
+  var newBuf = this.subarray(start, end)
+  // Return an augmented `Uint8Array` instance
+  newBuf.__proto__ = Buffer.prototype
+  return newBuf
+}
+
+/*
+ * Need to make sure that buffer isn't trying to write out of bounds.
+ */
+function checkOffset (offset, ext, length) {
+  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
+  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
+}
+
+Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    checkOffset(offset, byteLength, this.length)
+  }
+
+  var val = this[offset + --byteLength]
+  var mul = 1
+  while (byteLength > 0 && (mul *= 0x100)) {
+    val += this[offset + --byteLength] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  return this[offset]
+}
+
+Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return this[offset] | (this[offset + 1] << 8)
+}
+
+Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return (this[offset] << 8) | this[offset + 1]
+}
+
+Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return ((this[offset]) |
+      (this[offset + 1] << 8) |
+      (this[offset + 2] << 16)) +
+      (this[offset + 3] * 0x1000000)
+}
+
+Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] * 0x1000000) +
+    ((this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    this[offset + 3])
+}
+
+Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var i = byteLength
+  var mul = 1
+  var val = this[offset + --i]
+  while (i > 0 && (mul *= 0x100)) {
+    val += this[offset + --i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  if (!(this[offset] & 0x80)) return (this[offset])
+  return ((0xff - this[offset] + 1) * -1)
+}
+
+Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset] | (this[offset + 1] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset + 1] | (this[offset] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset]) |
+    (this[offset + 1] << 8) |
+    (this[offset + 2] << 16) |
+    (this[offset + 3] << 24)
+}
+
+Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] << 24) |
+    (this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    (this[offset + 3])
+}
+
+Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, true, 23, 4)
+}
+
+Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, false, 23, 4)
+}
+
+Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, true, 52, 8)
+}
+
+Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
+  offset = offset >>> 0
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, false, 52, 8)
+}
+
+function checkInt (buf, value, offset, ext, max, min) {
+  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+}
+
+Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var mul = 1
+  var i = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  byteLength = byteLength >>> 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  return offset + 2
+}
+
+Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  this[offset] = (value >>> 8)
+  this[offset + 1] = (value & 0xff)
+  return offset + 2
+}
+
+Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  this[offset + 3] = (value >>> 24)
+  this[offset + 2] = (value >>> 16)
+  this[offset + 1] = (value >>> 8)
+  this[offset] = (value & 0xff)
+  return offset + 4
+}
+
+Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  this[offset] = (value >>> 24)
+  this[offset + 1] = (value >>> 16)
+  this[offset + 2] = (value >>> 8)
+  this[offset + 3] = (value & 0xff)
+  return offset + 4
+}
+
+Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    var limit = Math.pow(2, (8 * byteLength) - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = 0
+  var mul = 1
+  var sub = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    var limit = Math.pow(2, (8 * byteLength) - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  var sub = 0
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
+  if (value < 0) value = 0xff + value + 1
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  this[offset] = (value >>> 8)
+  this[offset + 1] = (value & 0xff)
+  return offset + 2
+}
+
+Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  this[offset] = (value & 0xff)
+  this[offset + 1] = (value >>> 8)
+  this[offset + 2] = (value >>> 16)
+  this[offset + 3] = (value >>> 24)
+  return offset + 4
+}
+
+Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (value < 0) value = 0xffffffff + value + 1
+  this[offset] = (value >>> 24)
+  this[offset + 1] = (value >>> 16)
+  this[offset + 2] = (value >>> 8)
+  this[offset + 3] = (value & 0xff)
+  return offset + 4
+}
+
+function checkIEEE754 (buf, value, offset, ext, max, min) {
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+  if (offset < 0) throw new RangeError('Index out of range')
+}
+
+function writeFloat (buf, value, offset, littleEndian, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 23, 4)
+  return offset + 4
+}
+
+Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, false, noAssert)
+}
+
+function writeDouble (buf, value, offset, littleEndian, noAssert) {
+  value = +value
+  offset = offset >>> 0
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 52, 8)
+  return offset + 8
+}
+
+Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, false, noAssert)
+}
+
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function copy (target, targetStart, start, end) {
+  if (!start) start = 0
+  if (!end && end !== 0) end = this.length
+  if (targetStart >= target.length) targetStart = target.length
+  if (!targetStart) targetStart = 0
+  if (end > 0 && end < start) end = start
+
+  // Copy 0 bytes; we're done
+  if (end === start) return 0
+  if (target.length === 0 || this.length === 0) return 0
+
+  // Fatal error conditions
+  if (targetStart < 0) {
+    throw new RangeError('targetStart out of bounds')
+  }
+  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
+  if (end < 0) throw new RangeError('sourceEnd out of bounds')
+
+  // Are we oob?
+  if (end > this.length) end = this.length
+  if (target.length - targetStart < end - start) {
+    end = target.length - targetStart + start
+  }
+
+  var len = end - start
+  var i
+
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; --i) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000) {
+    // ascending copy from start
+    for (i = 0; i < len; ++i) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else {
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, start + len),
+      targetStart
+    )
+  }
+
+  return len
+}
+
+// Usage:
+//    buffer.fill(number[, offset[, end]])
+//    buffer.fill(buffer[, offset[, end]])
+//    buffer.fill(string[, offset[, end]][, encoding])
+Buffer.prototype.fill = function fill (val, start, end, encoding) {
+  // Handle string cases:
+  if (typeof val === 'string') {
+    if (typeof start === 'string') {
+      encoding = start
+      start = 0
+      end = this.length
+    } else if (typeof end === 'string') {
+      encoding = end
+      end = this.length
+    }
+    if (val.length === 1) {
+      var code = val.charCodeAt(0)
+      if (code < 256) {
+        val = code
+      }
+    }
+    if (encoding !== undefined && typeof encoding !== 'string') {
+      throw new TypeError('encoding must be a string')
+    }
+    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+      throw new TypeError('Unknown encoding: ' + encoding)
+    }
+  } else if (typeof val === 'number') {
+    val = val & 255
+  }
+
+  // Invalid ranges are not set to a default, so can range check early.
+  if (start < 0 || this.length < start || this.length < end) {
+    throw new RangeError('Out of range index')
+  }
+
+  if (end <= start) {
+    return this
+  }
+
+  start = start >>> 0
+  end = end === undefined ? this.length : end >>> 0
+
+  if (!val) val = 0
+
+  var i
+  if (typeof val === 'number') {
+    for (i = start; i < end; ++i) {
+      this[i] = val
+    }
+  } else {
+    var bytes = Buffer.isBuffer(val)
+      ? val
+      : new Buffer(val, encoding)
+    var len = bytes.length
+    for (i = 0; i < end - start; ++i) {
+      this[i + start] = bytes[i % len]
+    }
+  }
+
+  return this
+}
+
+// HELPER FUNCTIONS
+// ================
+
+var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
+
+function base64clean (str) {
+  // Node strips out invalid characters like \n and \t from the string, base64-js does not
+  str = str.trim().replace(INVALID_BASE64_RE, '')
+  // Node converts strings with length < 2 to ''
+  if (str.length < 2) return ''
+  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+  while (str.length % 4 !== 0) {
+    str = str + '='
+  }
+  return str
+}
+
+function toHex (n) {
+  if (n < 16) return '0' + n.toString(16)
+  return n.toString(16)
+}
+
+function utf8ToBytes (string, units) {
+  units = units || Infinity
+  var codePoint
+  var length = string.length
+  var leadSurrogate = null
+  var bytes = []
+
+  for (var i = 0; i < length; ++i) {
+    codePoint = string.charCodeAt(i)
+
+    // is surrogate component
+    if (codePoint > 0xD7FF && codePoint < 0xE000) {
+      // last char was a lead
+      if (!leadSurrogate) {
+        // no lead yet
+        if (codePoint > 0xDBFF) {
+          // unexpected trail
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        } else if (i + 1 === length) {
+          // unpaired lead
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
+      }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
+    } else if (leadSurrogate) {
+      // valid bmp char, but last char was a lead
+      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+    }
+
+    leadSurrogate = null
+
+    // encode utf8
+    if (codePoint < 0x80) {
+      if ((units -= 1) < 0) break
+      bytes.push(codePoint)
+    } else if (codePoint < 0x800) {
+      if ((units -= 2) < 0) break
+      bytes.push(
+        codePoint >> 0x6 | 0xC0,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x10000) {
+      if ((units -= 3) < 0) break
+      bytes.push(
+        codePoint >> 0xC | 0xE0,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x110000) {
+      if ((units -= 4) < 0) break
+      bytes.push(
+        codePoint >> 0x12 | 0xF0,
+        codePoint >> 0xC & 0x3F | 0x80,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else {
+      throw new Error('Invalid code point')
+    }
+  }
+
+  return bytes
+}
+
+function asciiToBytes (str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    // Node's code seems to be doing this and not & 0x7F..
+    byteArray.push(str.charCodeAt(i) & 0xFF)
+  }
+  return byteArray
+}
+
+function utf16leToBytes (str, units) {
+  var c, hi, lo
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    if ((units -= 2) < 0) break
+
+    c = str.charCodeAt(i)
+    hi = c >> 8
+    lo = c % 256
+    byteArray.push(lo)
+    byteArray.push(hi)
+  }
+
+  return byteArray
+}
+
+function base64ToBytes (str) {
+  return base64.toByteArray(base64clean(str))
+}
+
+function blitBuffer (src, dst, offset, length) {
+  for (var i = 0; i < length; ++i) {
+    if ((i + offset >= dst.length) || (i >= src.length)) break
+    dst[i + offset] = src[i]
+  }
+  return i
+}
+
+// ArrayBuffers from another context (i.e. an iframe) do not pass the `instanceof` check
+// but they should be treated as valid. See: https://github.com/feross/buffer/issues/166
+function isArrayBuffer (obj) {
+  return obj instanceof ArrayBuffer ||
+    (obj != null && obj.constructor != null && obj.constructor.name === 'ArrayBuffer' &&
+      typeof obj.byteLength === 'number')
+}
+
+// Node 0.10 supports `ArrayBuffer` but lacks `ArrayBuffer.isView`
+function isArrayBufferView (obj) {
+  return (typeof ArrayBuffer.isView === 'function') && ArrayBuffer.isView(obj)
+}
+
+function numberIsNaN (obj) {
+  return obj !== obj // eslint-disable-line no-self-compare
+}
+
+},{"base64-js":15,"ieee754":17}]},{},[7])(7)
 });

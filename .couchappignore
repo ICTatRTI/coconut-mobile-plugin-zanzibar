@@ -3,7 +3,9 @@
   // uncomment to activate; separate entries with ","
   // ".*~$"
   ".*\\.swp$",
-  // ".*\\.bak$"
+  // ".*\\.bak$",
   ".*node_modules.*",
-  "_attachments/node_modules.*"
+  "_attachments/node_modules.*",
+  "node_modules.*",
+  "scripts"
 ]

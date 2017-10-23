@@ -1,5 +1,5 @@
 class HouseholdLocationSelectorView extends Backbone.View
-  constructor: (@targetLocationField) ->
+  constructor: (@targetLocationField, disableTarget = true) ->
     @prefix = Math.floor(Math.random()*1000)
     @setElement $("
       <div style='padding-left:40px' class='travelLocations'>
@@ -13,6 +13,7 @@ class HouseholdLocationSelectorView extends Backbone.View
       locationSelector.find("[name=travelLocationName]").val locationName
       locationSelector.find("[value='#{entryPoint}']").prop('checked',true)
     @$el.append @addLocationButton() if @$('.addLocation').length is 0
+    @targetLocationField.prop('disabled', disableTarget)
 
   events:
     "change input[name=travelLocationName]": "updateTargetLocationField"

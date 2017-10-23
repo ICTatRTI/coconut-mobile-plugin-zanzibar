@@ -8,13 +8,13 @@ global.SummaryView = require './SummaryView'
 global.TransferView = require './TransferView'
 Sync = require './Sync'
 
-
 onStartup = ->
-
   try
     require './RouterPlugins'
     require './HeaderViewPlugins'
     require './MenuViewPlugins'
+    require './QuestionViewPlugins'
+    require './ResultsViewPlugins'
     
     dhisHierarchy = new DHISHierarchy()
     dhisHierarchy.loadExtendExport
@@ -33,16 +33,8 @@ onStartup = ->
     console.error "PLUGIN ERROR:"
     console.error error
 
-      # originalResultsViewRender = ResultsView::render
-      # ResultsView::render = ->
-      #   originalResultsViewRender.apply(this,arguments)
-      #   # Select the not complete panel by default
-      #   # TODO figure out how to do this without using a delay
-      #   _.delay( ->
-      #     $("[href='#not-complete-panel']")[0].click()
-      #   , 500)
-
 global.StartPlugins = [] unless StartPlugins?
 StartPlugins.push onStartup
+
 
 module.exports = Plugin

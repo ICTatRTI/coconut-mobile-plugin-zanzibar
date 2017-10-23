@@ -1,6 +1,7 @@
 #Router Plugins
 
 Router::default = =>
+  console.log "DEFA"
   Backbone.history.loadUrl()
   Coconut.router.navigate "##{Coconut.databaseName}/summary",trigger: true
 

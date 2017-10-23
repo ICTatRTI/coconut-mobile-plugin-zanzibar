@@ -6,26 +6,27 @@ class DHISHierarchy
   loadExtendExport: (options) =>
     @loadDHISHierarchy
       dhisDocumentName: options.dhisDocumentName
-      error: (error) ->
-        console.error "Error loading DHIS hierarchy:"
-        console.error error
-      success: =>
-        @loadDataToExtendWith
-          error: (error) ->
-            console.error "Error loading data to extend DHIS hierarchy:"
-            console.error error
-          success: =>
-            options.success(@extend())
+    .then =>
+      @loadDataToExtendWith
+        error: (error) ->
+          console.error "Error loading data to extend DHIS hierarchy:"
+          console.error error
+        success: =>
+          options.success(@extend())
+    .catch (error) ->
+      console.error "Error loading DHIS hierarchy:"
+      console.error error
+      throw error
 
   loadDHISHierarchy: (options) =>
     Coconut.database.get options.dhisDocumentName
     .catch (error) ->
       console.error "Error loading Geo Hierarchy:"
       console.error error
-      options.error?(error)
+      throw error error
     .then (result) =>
       @rawData = result
-      options.success()
+      Promise.resolve @rawData
 
   loadDataToExtendWith: (options) ->
 
