@@ -15,6 +15,7 @@ onStartup = ->
     require './MenuViewPlugins'
     require './QuestionViewPlugins'
     require './ResultsViewPlugins'
+    require './Form2jsPlugins'
     
     dhisHierarchy = new DHISHierarchy()
     dhisHierarchy.loadExtendExport

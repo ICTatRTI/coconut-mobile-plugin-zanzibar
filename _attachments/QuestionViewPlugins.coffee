@@ -1,7 +1,5 @@
 global.Case = require './Case'
 
-console.log "AZZZZZ"
-
 QuestionView::initialize = ->
   Coconut.resultCollection ?= new ResultCollection()
   @autoscrollTimer = 0

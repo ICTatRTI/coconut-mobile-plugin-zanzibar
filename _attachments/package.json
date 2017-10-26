@@ -14,7 +14,10 @@
     "chokidar-cli": "^1.2.0",
     "coffeeify": "^2.0.1",
     "colors": "^1.1.2",
+    "uglify-js": "^3.1.5",
+    "uglifyjs": "^2.4.11",
     "underscore": "^1.8.3",
+    "underscore.string": "^3.3.4",
     "watchify": "^3.9.0"
   },
   "devDependencies": {},
