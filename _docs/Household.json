@@ -3,6 +3,8 @@
   "collection": "question",
   "couchapp": {},
   "isApplicationDoc": true,
+  "action_on_questions_loaded": "window.malariaCase = new Case({caseID: Coconut.questionView.result.get 'MalariaCaseID'});malariaCase.fetch() if malariaCase.caseID",
+  "onValidatedComplete": "malariaCase.createNextResult()",
   "questions": [
     {
       "action_on_change": "if (ResultOfQuestion('Malaria Case ID') is null and value is 'Mass Screen') then setValue('Malaria Case ID', moment().format('YYMD') + Math.floor(Math.random()*100000))",

@@ -4,6 +4,8 @@
   "couchapp": {},
   "id": "Case Notification",
   "isApplicationDoc": true,
+  "action_on_questions_loaded": "window.malariaCase = new Case({caseID: Coconut.questionView.result.get 'MalariaCaseID'});malariaCase.fetch() if malariaCase.caseID",
+  "onValidatedComplete": "malariaCase.createNextResult()",
   "questions": [
     {
       "autocomplete-options": "window.FacilityOptions = FacilityHierarchy.allFacilities()",
