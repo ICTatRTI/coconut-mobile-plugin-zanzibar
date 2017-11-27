@@ -1,3 +1,11 @@
+# TODO Clean Data:  - old data was not camel cases properly
+# HeadofHouseholdName -> HeadOfHouseholdName
+#
+#      ContactMobilePatientRelative
+#      TotalNumberOfResidentsInTheHousehold
+#        Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold
+#       ReasonForVisitingHousehold
+
 _(["shehias_high_risk","shehias_received_irs"]).each (docId) ->
   Coconut.database.get docId
   .catch (error) -> console.error JSON.stringify error
@@ -240,7 +248,7 @@ class Case
 
   completeIndexCaseHouseholdMembers: =>
     _(@["Household Members"]).filter (householdMember) =>
-      householdMember.HeadofHouseholdName is @["Household"].HeadofHouseholdName and householdMember.complete is "true"
+      householdMember.HeadOfHouseholdName is @["Household"].HeadOfHouseholdName and householdMember.complete is "true"
 
   hasCompleteIndexCaseHouseholdMembers: =>
     @completeIndexCaseHouseholdMembers().length > 0
@@ -258,7 +266,7 @@ class Case
 
   completeNeighborHouseholdMembers: =>
     _(@["Household Members"]).filter (householdMember) =>
-      householdMember.HeadofHouseholdName isnt @["Household"].HeadofHouseholdName and householdMember.complete is "true"
+      householdMember.HeadOfHouseholdName isnt @["Household"].HeadOfHouseholdName and householdMember.complete is "true"
 
   hasCompleteNeighborHouseholdMembers: =>
     @completeIndexCaseHouseholdMembers().length > 0
@@ -539,11 +547,11 @@ class Case
       question: "Household"
       Reasonforvisitinghousehold: "Index Case Household"
       MalariaCaseID: @caseID
-      HeadofHouseholdName: @Facility.HeadofHouseholdName
+      HeadOfHouseholdName: @Facility.HeadOfHouseholdName
       Shehia: @shehia()
       Village: @Facility.Village
       ShehaMjumbe: @Facility.ShehaMjumbe
-      ContactMobilepatientrelative: @Facility.ContactMobilepatientrelative
+      ContactMobilePatientRelative: @Facility.ContactMobilePatientRelative
       collection: "result"
       createdAt: moment(new Date()).format(Coconut.config.get "date_format")
       lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
@@ -551,11 +559,11 @@ class Case
   createHouseholdMembers: =>
     unless _(@questions).contains 'Household Members'
       # -1 because we don't need information for index case
-      _(@Household.TotalNumberofResidentsintheHousehold-1).times =>
+      _(@Household.TotalNumberOfResidentsInTheHousehold-1).times =>
         result = {
           question: "Household Members"
           MalariaCaseID: @caseID
-          HeadofHouseholdName: @Household.HeadofHouseholdName
+          HeadOfHouseholdName: @Household.HeadOfHouseholdName
           collection: "result"
           createdAt: moment(new Date()).format(Coconut.config.get "date_format")
           lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
@@ -575,10 +583,10 @@ class Case
   createNeighborHouseholds: =>
     # If there is more than one Household for this case, then Neighbor households must already have been created
     unless (_(@questions).filter (question) -> question is 'Household').length is 1
-      _(@Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold).times =>
+      _(@Household.NumberOfOtherHouseholdsWithin50StepsOfIndexCaseHousehold).times =>
 
         result = {
-          Reasonforvisitinghousehold: "Index Case Neighbors"
+          ReasonForVisitingHousehold: "Index Case Neighbors"
           question: "Household"
           MalariaCaseID: @result.get "MalariaCaseID"
           Shehia: @result.get "Shehia"
