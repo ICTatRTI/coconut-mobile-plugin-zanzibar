@@ -5,7 +5,6 @@ ResultsView::render = ->
   # TODO figure out how to do this without using a delay
   #
   clickWhenAvailable = (elementId) ->
-    console.log "bABAAA"
     if $("[href='##{elementId}']").length > 0
       _.delay ->
         $("[href='##{elementId}']")[0].click()
@@ -14,4 +13,3 @@ ResultsView::render = ->
       _.delay((-> clickWhenAvailable(elementId)), 500)
 
   clickWhenAvailable("not-complete-panel")
-
