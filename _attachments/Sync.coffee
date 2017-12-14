@@ -210,7 +210,7 @@ class Sync extends Backbone.Model
       if mostRecentNotification? and moment(mostRecentNotification).isBefore((new moment).subtract(3,'weeks'))
         dateToStartLooking = mostRecentNotification
       else
-        dateToStartLooking = (new moment).subtract(3,'weeks').format(Coconut.config.get("date_format"))
+        dateToStartLooking = (new moment).subtract(3,'months').format(Coconut.config.get("date_format"))
 
 
       Coconut.database.get "district_language_mapping"
