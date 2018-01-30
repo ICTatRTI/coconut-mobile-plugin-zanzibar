@@ -11,7 +11,7 @@
       "autocomplete-options": "window.FacilityOptions = FacilityHierarchy.allFacilities()",
       "label": "Facility Name",
       "type": "autocomplete from code",
-      "validation": "'Facility Name ' + value + ' is not valid. Please try again.' unless _.contains(window.FacilityOptions, value)"
+      "validation": "'Facility Name ' + value + ' is not valid. Please try again.' unless _.contains(window.FacilityOptions, value.toUpperCase())"
     },
     {
       "label": "Malaria Case ID",
@@ -63,7 +63,7 @@
       "autocomplete-options": "window.ShehiaOptions = GeoHierarchy.allUniqueShehiaNames()",
       "label": "Shehia",
       "type": "autocomplete from code",
-      "validation": "'Shehia ' + value + ' is not valid. Please try again.' unless _.contains(window.ShehiaOptions, value)"
+      "validation": "'Shehia ' + value + ' is not valid. Please try again.' unless _.contains(window.ShehiaOptions, value.toUpperCase())"
     },
     {
       "label": "Village",

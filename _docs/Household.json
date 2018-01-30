@@ -24,7 +24,7 @@
       "autocomplete-options": "window.ShehiaOptions = GeoHierarchy.allUniqueShehiaNames()",
       "label": "Shehia",
       "type": "autocomplete from code",
-      "validation": "'Shehia ' + value + ' is not valid. Please try again.' unless _.contains(window.ShehiaOptions, value)"
+      "validation": "'Shehia ' + value + ' is not valid. Please try again.' unless _.contains(window.ShehiaOptions, value.toUpperCase())"
     },
     {
       "label": "Village",
