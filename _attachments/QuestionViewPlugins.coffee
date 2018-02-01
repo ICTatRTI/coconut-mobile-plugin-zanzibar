@@ -15,7 +15,7 @@ global.convertDayNumbersToDatesRelativeToDiagnosisDate = (labelText) ->
 
       start = moment(malariaCase.indexCaseDiagnosisDate()).subtract(endRange,'days')
       end = moment(malariaCase.indexCaseDiagnosisDate()).subtract(beginningRange,'days')
-      element.html(labelText.replace(/Zanzibar.*/, 'Zanzibar between the ' + start.format('Do of MMM, YYYY') + ' (' + start.fromNow()  + ') and ' + end.format('Do of MMM, YYYY') + ' (' + end.fromNow() + ')' ))
+      element.html(labelText.replace(/Zanzibar.*/, 'Zanzibar between the ' + start.format('Do of MMM, YYYY') + ' (' + start.fromNow()  + ') and ' + end.format('Do of MMM, YYYY') + ' (' + end.fromNow() + ')*' ))
   , 2000
 
 global.convertDayNumbersToDatesRelativeToDiagnosisDateAndAddSelector = (labelText) ->
