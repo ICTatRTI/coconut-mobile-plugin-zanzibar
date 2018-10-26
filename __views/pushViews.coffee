@@ -1,4 +1,4 @@
-#! /usr/bin/env ruby
+#! /usr/bin/env coffee
 request = require 'request'
 glob = require 'glob'
 _ = require 'underscore'
@@ -28,6 +28,8 @@ glob "*.coffee", (er, files) ->
       views:
         "#{view_name}":
           map:  CoffeeScript.compile(map, {bare:true})
+
+    console.log local_view_doc
 
     reduce_file = view.replace(/\.coffee/,"__reduce.coffee")
     console.log reduce_file

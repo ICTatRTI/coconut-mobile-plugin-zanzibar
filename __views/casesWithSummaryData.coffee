@@ -1,3 +1,4 @@
+# db:zanzibar
 (doc) ->
   if doc.MalariaCaseID
     date = doc.DateofPositiveResults or doc.lastModifiedAt
