@@ -6,7 +6,7 @@ class HouseholdLocationSelectorView extends Backbone.View
       </div>
     ")
     @targetLocationField.after @el
-    _(@targetLocationField.val().split(/,/)).each (location) =>
+    _(@targetLocationField.val()?.split(/,/)).each (location) =>
       return if location.replace(/ *:* */,"") is ""
       [locationName, entryPoint] = location.split(/: /)
       locationSelector = @addLocation()
@@ -20,7 +20,7 @@ class HouseholdLocationSelectorView extends Backbone.View
     "change input.radio": "updateTargetLocationField"
     "click button.addLocation": "addLocation"
     "click button.removeLocation": "remove"
- 
+
   addLocationButton: -> "
     <button type='button' style='position:static' class='addLocation mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent'>
       Add location
@@ -40,7 +40,7 @@ class HouseholdLocationSelectorView extends Backbone.View
   addLocation: (event) =>
     $(event.target).closest("button.addLocation").remove() if event # Remove the addLocation button that was clicked
     @prefix+=1
-    
+
     travelLocations = @targetLocationField.siblings(".travelLocations")
 
     travelLocationSelector = $("
