@@ -6,43 +6,11 @@
 #        Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold
 #       ReasonForVisitingHousehold
 
-_(["shehias_high_risk","shehias_received_irs"]).each (docId) ->
-  Coconut.database.get docId
-  .catch (error) -> console.error JSON.stringify error
-  .then (result) ->
-    Coconut[docId] = result
-    console.log "Loaded #{docId}"
-
-
-Utils.addOrUpdateDesignDoc(Utils.createDesignDoc "cases", (doc) ->
-  emit(doc.MalariaCaseID, null) if doc.MalariaCaseID
-  emit(doc.caseid, null) if doc.caseid
-)
-
-Utils.addOrUpdateDesignDoc(Utils.createDesignDoc "casesWithSummaryData", (doc) ->
-  if doc.MalariaCaseID
-    date = doc.DateofPositiveResults or doc.lastModifiedAt
-    match = date.match(/^(\d\d).(\d\d).(2\d\d\d)/)
-    if match?
-      date = "#{match[3]}-#{match[2]}-#{match[1]}"
-
-    if doc.transferred?
-      lastTransfer = doc.transferred[doc.transferred.length-1]
-
-    if date.match(/^2\d\d\d\-\d\d-\d\d/)
-      emit date, [doc.MalariaCaseID,doc.question,doc.complete,lastTransfer]
-
-  if doc.caseid
-    if document.transferred?
-      lastTransfer = doc.transferred[doc.transferred.length-1]
-    if doc.date.match(/^2\d\d\d\-\d\d-\d\d/)
-      emit doc.date, [doc.caseid, "Facility Notification", null, lastTransfer]
-)
-
 class Case
   constructor: (options) ->
     @caseID = options?.caseID
     @loadFromResultDocs(options.results) if options?.results
+
 
   loadFromResultDocs: (resultDocs) ->
     @caseResults = resultDocs
@@ -713,5 +681,52 @@ Case.updateSpreadsheetForCases = (options) ->
               spreadsheet_row_doc[question] = malariaCase.spreadsheetRowString(question)
             docsToSave.push spreadsheet_row_doc
             finished()
+
+Case.setup = =>
+  new Promise (resolve) =>
+
+    for docId in ["shehias_high_risk","shehias_received_irs"]
+      await Coconut.database.get docId
+      .catch (error) -> console.error JSON.stringify error
+      .then (result) ->
+        Coconut[docId] = result
+        Promise.resolve()
+
+    designDocs = {
+      cases: (doc) ->
+        emit(doc.MalariaCaseID, null) if doc.MalariaCaseID
+        emit(doc.caseid, null) if doc.caseid
+
+      casesWithSummaryData: (doc) ->
+        if doc.MalariaCaseID
+          date = doc.DateofPositiveResults or doc.lastModifiedAt
+          match = date.match(/^(\d\d).(\d\d).(2\d\d\d)/)
+          if match?
+            date = "#{match[3]}-#{match[2]}-#{match[1]}"
+
+          if doc.transferred?
+            lastTransfer = doc.transferred[doc.transferred.length-1]
+
+          if date.match(/^2\d\d\d\-\d\d-\d\d/)
+            emit date, [doc.MalariaCaseID,doc.question,doc.complete,lastTransfer]
+
+        if doc.caseid
+          if document.transferred?
+            lastTransfer = doc.transferred[doc.transferred.length-1]
+          if doc.date.match(/^2\d\d\d\-\d\d-\d\d/)
+            emit doc.date, [doc.caseid, "Facility Notification", null, lastTransfer]
+
+    }
+
+    for name, designDocFunction of designDocs
+      designDoc = Utils.createDesignDoc name, designDocFunction
+      await Coconut.database.upsert designDoc._id, (existingDoc) =>
+        return false if _(designDoc.views).isEqual(existingDoc?.views)
+        console.log "Creating Case view: #{name}"
+        designDoc
+      .catch (error) => 
+        console.error error
+    resolve()
+
 
 module.exports = Case

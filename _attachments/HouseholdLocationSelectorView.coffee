@@ -1,5 +1,6 @@
 class HouseholdLocationSelectorView extends Backbone.View
   constructor: (@targetLocationField, disableTarget = true) ->
+    super()
     @prefix = Math.floor(Math.random()*1000)
     @setElement $("
       <div style='padding-left:40px' class='travelLocations'>

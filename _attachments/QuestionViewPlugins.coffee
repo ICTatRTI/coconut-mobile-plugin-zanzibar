@@ -1,7 +1,6 @@
 global.Case = require './Case'
 
 QuestionView::initialize = ->
-  Coconut.resultCollection ?= new ResultCollection()
   @autoscrollTimer = 0
 
 global.convertDayNumbersToDatesRelativeToDiagnosisDate = (labelText) ->

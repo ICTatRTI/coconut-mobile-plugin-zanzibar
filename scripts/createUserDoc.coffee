@@ -16,4 +16,4 @@ doc = {
 }
 
 
-console.log doc
+console.log JSON.stringify(doc)

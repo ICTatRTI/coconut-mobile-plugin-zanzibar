@@ -6,17 +6,21 @@ global.Case = require './Case'
 global.HouseholdLocationSelectorView = require './HouseholdLocationSelectorView'
 global.SummaryView = require './SummaryView'
 global.TransferView = require './TransferView'
-Sync = require './Sync'
+require './SyncPlugins'
 
 onStartup = ->
-  try
+  new Promise (resolve) =>
     require './RouterPlugins'
     require './HeaderViewPlugins'
     require './MenuViewPlugins'
     require './QuestionViewPlugins'
     require './ResultsViewPlugins'
     require './Form2jsPlugins'
-    
+
+    await Case.setup()
+
+    console.log "Loading DHIS2 Hierarchy"
+
     dhisHierarchy = new DHISHierarchy()
     dhisHierarchy.loadExtendExport
       dhisDocumentName: "dhis2" # This is the document that was exported from DHIS2
@@ -24,15 +28,8 @@ onStartup = ->
       success: (result) ->
         global.GeoHierarchy = new GeoHierarchyClass(result)
         global.FacilityHierarchy = GeoHierarchy # These have been combined
-
-        # Replacing sync
-  #  require './ExtendSync'
-        Coconut.syncView.sync = new Sync()
-        Coconut.cloudDatabase = new PouchDB(Coconut.config.cloud_url_with_credentials())
-
-  catch error
-    console.error "PLUGIN ERROR:"
-    console.error error
+        console.log "DHIS2 Hierarchy Loaded"
+        resolve()
 
 global.StartPlugins = [] unless StartPlugins?
 StartPlugins.push onStartup
