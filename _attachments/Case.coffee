@@ -6,6 +6,8 @@
 #        Household.Numberofotherhouseholdswithin50stepsofindexcasehousehold
 #       ReasonForVisitingHousehold
 
+moment = require 'moment'
+
 class Case
   constructor: (options) ->
     @caseID = options?.caseID
@@ -66,16 +68,20 @@ class Case
 
 
   fetch: (options) =>
-    unless @caseID
-      console.error "No caseID to fetch data for"
-      return
-    Coconut.database.query "cases/cases",
-      key: @caseID
-      include_docs: true
-    .catch (error) -> options?.error()
-    .then (result) =>
-      @loadFromResultDocs(_.pluck(result.rows, "doc"))
-      options?.success()
+    new Promise (resolve, reject) =>
+      unless @caseID
+        console.error "No caseID to fetch data for"
+        return reject "No caseID to fetch data for"
+      Coconut.database.query "cases/cases",
+        key: @caseID
+        include_docs: true
+      .catch (error) -> 
+        options?.error()
+        return reject(error)
+      .then (result) =>
+        @loadFromResultDocs(_.pluck(result.rows, "doc"))
+        options?.success()
+        resolve()
 
   toJSON: =>
     returnVal = {}
@@ -273,14 +279,19 @@ class Case
       return @["Case Notification"]?.Name
 
   indexCaseDiagnosisDate: ->
-    if @["Facility"]?.DateofPositiveResults?
-      date = @["Facility"].DateofPositiveResults
-      if date.match(/^20\d\d/)
-        return moment(@["Facility"].DateofPositiveResults).format("YYYY-MM-DD")
+    if @["Facility"]?.DateOfPositiveResults?
+      date = @["Facility"].DateOfPositiveResults
+      momentDate = if date.match(/^20\d\d/)
+        moment(@["Facility"].DateOfPositiveResults)
       else
-        return moment(@["Facility"].DateofPositiveResults, "DD-MM-YYYY").format("YYYY-MM-DD")
-    else if @["USSD Notification"]?
+        moment(@["Facility"].DateOfPositiveResults, "DD-MM-YYYY")
+      return momentDate.format("YYYY-MM-DD") if momentDate.isValid()
+
+    if @["USSD Notification"]?
       return moment(@["USSD Notification"].date).format("YYYY-MM-DD")
+
+    else if @["Case Notification"]?
+      return moment(@["Case Notification"].createdAt).format("YYYY-MM-DD")
 
   householdMembersDiagnosisDate: ->
     returnVal = []
@@ -359,12 +370,7 @@ class Case
 
   daysBetweenPositiveResultAndNotification: =>
 
-    dateOfPositiveResults = if @["Facility"]?.DateofPositiveResults?
-      date = @["Facility"].DateofPositiveResults
-      if date.match(/^20\d\d/)
-        moment(@["Facility"].DateofPositiveResults).format("YYYY-MM-DD")
-      else
-        moment(@["Facility"].DateofPositiveResults, "DD-MM-YYYY").format("YYYY-MM-DD")
+    dateOfPositiveResults = @indexCaseDiagnosisDate()
 
     notificationDate = if @["USSD Notification"]?
       @["USSD Notification"].date
