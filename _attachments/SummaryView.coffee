@@ -70,7 +70,7 @@ class SummaryView extends Backbone.View
           <th class='header'>ID</th>
           <th class='header'>Type</th>
           <th class='header'>Complete</th>
-          <th class='header'>Transfer</th>
+          <th class='header'>Transferred From</th>
           <th class='header'>Options</th>
         </tr></thead>
         <tbody>
@@ -85,7 +85,7 @@ class SummaryView extends Backbone.View
                 <td><small>
                   <pre>
                   #{
-                    if row.value[3]? then JSON.stringify(row.value[3],null,2).replace(/({\n|\n}|\")/g,"") else ""
+                    if row.value[3]? then row.value[3].from else ""
                   }
                   </pre></small></td>
                 <td> <a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{row.value[0]}' title='Transfer'></a></td>
