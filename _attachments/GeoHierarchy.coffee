@@ -83,7 +83,7 @@ class GeoHierarchy
     _(descendants).filter (descendant) -> descendant.levelName is targetLevelName
 
   findAllAncestorsAtLevel: (name, sourceLevelName, targetLevelName) =>
-    ancestors = @findFirst(name, sourceLevelName).ancestors()
+    ancestors = @findFirst(name, sourceLevelName)?.ancestors()
     _(ancestors).filter (ancestor) -> ancestor.levelName is targetLevelName
 
 
