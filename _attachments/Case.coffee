@@ -172,6 +172,13 @@ class Case
     return @district() if geographicLevel.match(/district/i)
     return @validShehia() if geographicLevel.match(/shehia/i)
 
+  ageInYears: =>
+    return null unless @Facility
+    if @Facility["Age in Months Or Years"]? and @Facility["Age in Months Or Years"] is "Months"
+      @Facility["Age"] / 12.0
+    else
+      @Facility["Age"]
+
   possibleQuestions: ->
     ["Case Notification", "Facility","Household","Household Members"]
 

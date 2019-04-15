@@ -79,7 +79,7 @@ class GeoHierarchy
     _(parentNode[0].children()).pluck "name"
 
   findAllDescendantsAtLevel: (name, sourceLevelName, targetLevelName) =>
-    descendants = @findFirst(name, sourceLevelName).descendants()
+    descendants = @findFirst(name, sourceLevelName)?.descendants()
     _(descendants).filter (descendant) -> descendant.levelName is targetLevelName
 
   findAllAncestorsAtLevel: (name, sourceLevelName, targetLevelName) =>
