@@ -2,9 +2,6 @@ Dialog = require './js-libraries/modal-dialog'
 
 class TransferView extends Backbone.View
   el: '#content'
-  initialize: (options) =>
-    @options = options
-    _.bindAll(this, 'render')
 
   events:
     "click #cancel_button": "cancel"
@@ -22,21 +19,19 @@ class TransferView extends Backbone.View
 
   transfer: =>
     user = $('select').find(":selected").text()
-    caseID = @options.caseID
-    caseResults = @options.caseResults
-    _(caseResults).each (caseResult) ->
+    updatedCaseResults = _(@caseResults).map (caseResult) ->
 #      Coconut.debug "Marking #{caseResult._id} as transferred"
-      caseResult.transferred = [] unless caseResult.transferred?
-      caseResult.transferred.push {
+      (caseResult.transferred ?= []).push
         from: Coconut.currentUser.get("_id")
         to: $('select').find(":selected").attr "id"
         time: moment().format("YYYY-MM-DD HH:mm")
         notifiedViaSms: []
         received: false
-      }
-    Coconut.database.bulkDocs {docs: caseResults}
+      caseResult
+
+    Coconut.database.bulkDocs {docs: updatedCaseResults}
     .catch (error) ->
-      console.error "Could not save #{JSON.stringify caseResults}:"
+      console.error "Could not save #{JSON.stringify updatedCaseResults}:"
       console.error error
     .then () ->
       Coconut.syncView.sync.sendToCloud
@@ -45,7 +40,7 @@ class TransferView extends Backbone.View
         success: =>
           Dialog.showDialog
             title: "CASE TRANSFER",
-            text: "Case #{caseID} has been successfully transferred to #{user}"
+            text: "Case #{@caseID} has been successfully transferred to #{user}"
             neutral:
               title: "Continue"
               onClick: (e) ->
@@ -100,34 +95,34 @@ class TransferView extends Backbone.View
         )
 
     Coconut.database.query "cases",
-      key: @options.caseID
+      key: @caseID
       include_docs: true
-    ,
-      (error, result) =>
-        console.error error if error
+    .catch (error) =>
+      console.error error if error
+    .then (result) =>
+      console.error error if error
 
-        caseResults = _.pluck(result.rows, "doc")
-        @options.caseResults = caseResults
-        $("table#summary tbody").append(_(caseResults).map (caseResult) ->
-          completed = if caseResult.complete == true then 'Yes' else 'No'
-          "
-            <tr>
-              <td>#{caseResult.MalariaCaseID}</td>
-              <td>#{caseResult.question}</td>
-              <td>#{if caseResult.complete == true then 'Yes' else 'No'}</td>
-            </tr>
-          "
-        .join "")
+      @caseResults = _.pluck(result.rows, "doc")
+      $("table#summary tbody").append(_(caseResults).map (caseResult) ->
+        completed = if caseResult.complete == true then 'Yes' else 'No'
+        "
+          <tr>
+            <td>#{caseResult.MalariaCaseID}</td>
+            <td>#{caseResult.question}</td>
+            <td>#{if caseResult.complete == true then 'Yes' else 'No'}</td>
+          </tr>
+        "
+      .join "")
 
-        $("table#summary").DataTable
-          aaSorting: [[0,"desc"]]
-          scrollX: true
-          searching: false
-          paging: false
-          retrieve: true
-          info: false
-          drawCallback: () ->
-            $(".dataTables_scrollHeadInner").css("width":"100%")
-            $(".dataTable.no-footer").css("width":"100%")
+      $("table#summary").DataTable
+        aaSorting: [[0,"desc"]]
+        scrollX: true
+        searching: false
+        paging: false
+        retrieve: true
+        info: false
+        drawCallback: () ->
+          $(".dataTables_scrollHeadInner").css("width":"100%")
+          $(".dataTable.no-footer").css("width":"100%")
 
 module.exports = TransferView

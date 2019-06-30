@@ -5,6 +5,7 @@ MenuView::questionLinks = (option) ->
     success: =>
       menuIcons = { 'Case Notification':'wifi', 'Facility':'hospital', 'Household':'home-map-marker', 'Household Members':'account'}
       $("#drawer_question_sets").html (Coconut.questions.map (question,index) ->
+        return if question.id is "Time Outside Zanzibar"
         new_url = "##{Coconut.databaseName}/new/result/#{escape(question.id)}"
         results_url = "##{Coconut.databaseName}/show/results/#{escape(question.id)}"
         spanID = question.id.replace(/\s/g,"_")

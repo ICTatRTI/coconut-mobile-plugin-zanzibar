@@ -73,7 +73,7 @@ Sync::getNewNotifications = (options) ->
           if district_language_mapping[currentUserDistrict]?
             currentUserDistrict = district_language_mapping[currentUserDistrict]
 
-          @log "Found #{result.rows.length} USSD notifications. Filtering for USSD notifications for district:  #{currentUserDistrict}. Please wait."
+          @log "Found #{result.rows?.length} USSD notifications. Filtering for USSD notifications for district:  #{currentUserDistrict}. Please wait."
           acceptedNotificationIds = []
           for row in result.rows
             notification = row.doc
@@ -170,29 +170,28 @@ Sync::transferCasesIn =  (options) ->
       @save
         last_send_error: true
     .then (result) =>
-      cases = {}
+      transferCases = {}
       _(result.rows).each (row) ->
         caseId = row.value[1]
-        cases[caseId] = [] unless cases[caseId]
-        cases[caseId].push row.doc
+        (transferCases[caseId] ?= []).push row.doc
 
-      if _(cases).isEmpty()
+      if _(transferCases).isEmpty()
         @log "No cases to transfer."
         options?.success()
         resolve()
 
-      for caseID, caseResultDocs of cases
-        malariaCase = new Case()
-        malariaCase.loadFromResultDocs(caseResultDocs)
-        caseId = malariaCase.MalariaCaseID()
-        if confirm "Accept transfer case #{caseId} #{malariaCase.indexCasePatientName()} from facility #{malariaCase.facility()} in #{malariaCase.district()}?"
+      for caseID, caseResultDocs of transferCases
+        transferCase = new Case()
+        transferCase.loadFromResultDocs(caseResultDocs)
+        caseId = transferCase.MalariaCaseID()
+        if confirm "Accept transfer case #{caseId} #{transferCase.indexCasePatientName()} from facility #{transferCase.facility()} in #{transferCase.district()}?"
           caseResultIds = _(caseResultDocs).pluck "_id"
           await Coconut.cloudDB.replicate.to Coconut.database,
             doc_ids: caseResultIds
           .catch (error) => 
             console.error error
-            @log "Failed to replicate from cloud a transfered case: #{malariaCase.MalariaCaseID()}"
-            throw "Failed to replicate from cloud a transfered case: #{malariaCase.MalariaCaseID()}"
+            @log "Failed to replicate from cloud a transfered case: #{transferCase.MalariaCaseID()}"
+            throw "Failed to replicate from cloud a transfered case: #{transferCase.MalariaCaseID()}"
           .then =>
             for caseResultId in caseResultIds
               await Coconut.database.upsert caseResultId, (caseResultDoc) =>
@@ -202,8 +201,8 @@ Sync::transferCasesIn =  (options) ->
               doc_ids: caseResultIds
             .catch (error) => 
               console.error error
-              @log "Failed to replicate to cloud a transfered case: #{malariaCase.MalariaCaseID()}"
-              throw "Failed to replicate to cloud a transfered case: #{malariaCase.MalariaCaseID()}"
+              @log "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
+              throw "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
             .then (replicationResult) =>
               console.log replicationResult
               @log "#{caseId} (#{caseResultIds.join()}): saved on device and updated in cloud"

@@ -7,18 +7,17 @@ Router::default = =>
 Coconut.router._bindRoutes()
 
 Coconut.router.route ":database/summary", ->
-  console.log "summary called"
   Coconut.summaryView ?= new SummaryView()
-  Coconut.database.query "casesWithSummaryData",
-    descending: true
-    include_docs: false
-    limit: 100
+  oneMonthAgo = moment().subtract(1, "months").format("YYYY-MM-DD")
+  Case.getCases(oneMonthAgo, moment().format("YYYY-MM-DD"))
   .catch (error) =>
     console.error JSON.stringify error
-  .then (result) =>
-    Coconut.summaryView.render result
+  .then (cases) =>
+    console.log cases
+    Coconut.summaryView.render cases
 
 Coconut.router.route ":database/transfer/:caseID", (caseID) ->
   if Coconut.currentUser
-    Coconut.transferView ?= new TransferView({caseID: caseID})
+    Coconut.transferView ?= new TransferView()
+    Coconut.transferView.caseID = caseID
     Coconut.transferView.render()

@@ -7,6 +7,8 @@
 #       ReasonForVisitingHousehold
 
 moment = require 'moment'
+radix64 = require('radix-64')()
+HouseholdMember = require './HouseholdMember'
 
 class Case
   constructor: (options) ->
@@ -35,6 +37,9 @@ class Case
         @questions.push resultDoc.question
         if resultDoc.question is "Household Members"
           this["Household Members"].push resultDoc
+          householdMember = new HouseholdMember()
+          householdMember.load(resultDoc)
+          (@householdMembers or= []).push(householdMember)
         else if resultDoc.question is "Household" and resultDoc.Reasonforvisitinghousehold is "Index Case Neighbors"
           this["Neighbor Households"].push resultDoc
         else
@@ -186,15 +191,32 @@ class Case
     result = {}
     _.each @possibleQuestions(), (question) =>
       if question is "Household Members"
-        result["Household Members"] = true
-        _.each @["Household Members"]?, (member) ->
-          result["Household Members"] = false if member.complete is "false"
+        if @["Household Members"]?
+          result["Household Members"] = true
+          _.each @["Household Members"], (member) ->
+            result["Household Members"] = false if member.complete isnt "true"
+        else
+          result["Household Members"] = false
       else
         result[question] = (@[question]?.complete is "true")
     return result
 
   complete: =>
     @questionStatus()["Household Members"] is true
+
+  status: =>
+    if @["Facility"]?["Lost To Followup"] is "Yes"
+      return "Lost To Followup"
+    else
+      if @complete()
+        return "Followed up"
+      else
+        returnVal = ""
+        for question, status of @questionStatus()
+          if status is false
+            returnVal = "#{question} In Progress"
+            break
+        returnVal
 
   hasCompleteFacility: =>
     @.Facility?.complete is "true"
@@ -233,6 +255,11 @@ class Case
 
   hasCompleteIndexCaseHouseholdMembers: =>
     @completeIndexCaseHouseholdMembers().length > 0
+
+  allPositiveIndividualsForCase: =>
+    #TODO handle legacy
+    _(@householdMembers).filter (householdMember) =>
+      householdMember.isPositive()
 
   positiveCasesAtIndexHousehold: ->
     _(@completeIndexCaseHouseholdMembers()).filter (householdMember) ->
@@ -389,6 +416,8 @@ class Case
   timeFacilityNotified: =>
     if @["USSD Notification"]?
       @["USSD Notification"].date
+    else if @["Case Notification"]?
+      @["Case Notification"].createdAt
     else
       null
 
@@ -426,12 +455,27 @@ class Case
       moment.duration(@timeFromCaseNotificationToCompleteFacility()).asDays()
 
   timeFromFacilityToCompleteHousehold: =>
-    if @["Household"]?.complete is "true" and @["Facility"]?
-      return moment(@["Household"].lastModifiedAt.replace(/\+0\d:00/,"")).diff(@["Facility"]?.lastModifiedAt)
+    if @complete() and @["Facility"]?
+      return moment(@timeAllHouseholdMembersComplete().replace(/\+0\d:00/,"")).diff(@["Facility"]?.lastModifiedAt)
+
+  hoursFromFacilityToCompleteHousehold: => 
+    Math.floor(moment.duration(@timeFromFacilityToCompleteHousehold()).asHours())
 
   timeFromSMSToCompleteHousehold: =>
-    if @["Household"]?.complete is "true" and @["USSD Notification"]?
-      return moment(@["Household"].lastModifiedAt.replace(/\+0\d:00/,"")).diff(@["USSD Notification"]?.date)
+    if @complete() and @timeFacilityNotified()
+      return moment(@timeAllHouseholdMembersComplete().replace(/\+0\d:00/,"")).diff(@timeFacilityNotified())
+
+  hoursFromNotificationToCompleteHousehold: => 
+    Math.floor(moment.duration(@timeFromSMSToCompleteHousehold()).asHours())
+
+  hoursFromSMSToCompleteHousehold: => 
+    @hoursFromNotificationToCompleteHousehold()
+
+  timeAllHouseholdMembersComplete: =>
+    if @complete()
+      _(@householdMembers).chain().pluck("doc").pluck("lastModifiedAt").value().sort().pop()
+    else
+      null
 
   daysFromSMSToCompleteHousehold: =>
     if @["Household"]?.complete is "true" and @["USSD Notification"]?
@@ -515,6 +559,7 @@ class Case
 
   createFacility: =>
     @saveAndAddResultToCase
+      _id: "result-case-#{@caseID}-Facility-#{radix64.encodeInt(moment().format('x'))}-#{Coconut.instanceId}"
       question: "Facility"
       MalariaCaseID: @caseID
       FacilityName: @facility()
@@ -525,6 +570,7 @@ class Case
 
   createHousehold: =>
     @saveAndAddResultToCase
+      _id: "result-case-#{@caseID}-Household-#{radix64.encodeInt(moment().format('x'))}-#{Coconut.instanceId}"
       question: "Household"
       Reasonforvisitinghousehold: "Index Case Household"
       MalariaCaseID: @caseID
@@ -539,9 +585,9 @@ class Case
 
   createHouseholdMembers: =>
     unless _(@questions).contains 'Household Members'
-      # -1 because we don't need information for index case
-      _(@Household.TotalNumberOfResidentsInTheHousehold-1).times =>
+      _(@Household.TotalNumberOfResidentsInTheHousehold).times =>
         result = {
+          _id: "result-case-#{@caseID}-Household-Members-#{radix64.encodeInt(moment().format('x'))}-#{radix64.encodeInt(Math.round(Math.random()*100000))}-#{Coconut.instanceId}" # There's a chance moment will be the same so add some randomness
           question: "Household Members"
           MalariaCaseID: @caseID
           HeadOfHouseholdName: @Household.HeadOfHouseholdName
@@ -567,6 +613,7 @@ class Case
       _(@Household.NumberOfOtherHouseholdsWithin50StepsOfIndexCaseHousehold).times =>
 
         result = {
+          _id: "result-case-#{@caseID}-Household-#{radix64.encodeInt(moment().format('x'))}-#{radix64.encodeInt(Math.round(Math.random()*100000))}-#{Coconut.instanceId}" # There's a chance moment will be the same so add some randomness
           ReasonForVisitingHousehold: "Index Case Neighbors"
           question: "Household"
           MalariaCaseID: @result.get "MalariaCaseID"
@@ -694,6 +741,25 @@ Case.updateSpreadsheetForCases = (options) ->
               spreadsheet_row_doc[question] = malariaCase.spreadsheetRowString(question)
             docsToSave.push spreadsheet_row_doc
             finished()
+
+Case.getCases = (startDate, endDate) =>
+  Coconut.database.query "casesWithSummaryData",
+    startDate: startDate
+    endDate: endDate
+    descending: true
+    include_docs: true
+  .catch (error) =>
+    console.error JSON.stringify error
+  .then (result) =>
+    _(result.rows).chain().map (row) =>
+      row.doc.MalariaCaseID ?= row.key  # For case docs without MalariaCaseID add it (caseid etc)
+      row.doc
+    .groupBy "MalariaCaseID"
+    .map (resultDocs, malariaCaseID) =>
+      new Case
+        caseID: malariaCaseID
+        results: resultDocs
+    .value()
 
 Case.setup = =>
   new Promise (resolve) =>

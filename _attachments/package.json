@@ -6,7 +6,7 @@
   "scripts": {
     "start": "npm run watch & npm run deploy & while sleep 2; do echo -n '.'; done",
     "watch": "./node_modules/watchify/bin/cmd.js --standalone Plugin -v -t coffeeify --extension='.coffee' Plugin.coffee -o plugin-bundle.js",
-    "deploy": "./node_modules/chokidar-cli/index.js plugin-bundle.js -c \"/usr/local/bin/couchapp push\""
+    "deploy": "./node_modules/chokidar-cli/index.js plugin-bundle.js -c \"/usr/bin/couchapp push\""
   },
   "dependencies": {
     "browserify": "^13.3.0",
