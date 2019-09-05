@@ -549,7 +549,7 @@ class Case
           console.log "Creating Household members and neighbor households if necessary"
           @createHouseholdMembers()
           @createNeighborHouseholds()
-        else if @Facility?.complete
+        else if @Facility?.complete and @Facility?.IsCaseLostToFollowup is "No"
           console.log "Creating Household"
           @createHousehold()
         else if @["Case Notification"]?.complete
@@ -585,7 +585,7 @@ class Case
 
   createHouseholdMembers: =>
     unless _(@questions).contains 'Household Members'
-      _(@Household.TotalNumberOfResidentsInTheHousehold).times =>
+      _(@Household.TotalNumberOfResidentsInTheHousehold).times (index) =>
         result = {
           _id: "result-case-#{@caseID}-Household-Members-#{radix64.encodeInt(moment().format('x'))}-#{radix64.encodeInt(Math.round(Math.random()*100000))}-#{Coconut.instanceId}" # There's a chance moment will be the same so add some randomness
           question: "Household Members"
@@ -595,6 +595,18 @@ class Case
           createdAt: moment(new Date()).format(Coconut.config.get "date_format")
           lastModifiedAt: moment(new Date()).format(Coconut.config.get "date_format")
         }
+
+        if index is 0
+          _(result).extend
+            HouseholdMemberType: "Index Case"
+            FirstName: @Facility?.FirstName
+            LastName: @Facility?.LastName
+            DateOfPositiveResults: @Facility?.DateOfPositiveResults
+            Sex: @Facility?.Sex
+            Age: @Facility?.Age
+            AgeInYearsMonthsDays: @Facility?.AgeInYearsMonthsDays
+            MalariaMrdtTestResults: @Facility?.MalariaMrdtTestResults
+            MalariaTestPerformed: @Facility?.MalariaTestPerformed
 
         Coconut.database.post result
         .then =>
