@@ -28,10 +28,23 @@ class SummaryView extends Backbone.View
                 <td>#{facilityCase.hoursFromNotificationToCompleteHousehold() or "-"}</td>
                 <td>#{facilityCase.caseID}</td>
                 <td>#{facilityCase.facility()}</td>
-                <td>#{facilityCase.status()}</td>
-                <td> 
-                  <a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{facilityCase.caseID}' title='Transfer'></a>
-                </td>
+
+                #{
+                  lastTransferEntry = _(facilityCase["Facility"]?.transferred).last()
+                  if lastTransferEntry?.from is Coconut.currentUser.id
+                    transferredTo = Coconut.users.findWhere(_id:lastTransferEntry.to).get("name")
+                    "
+                      <td>Transferred to #{transferredTo} (#{lastTransferEntry.to.replace(/user./,"")})</td>
+                      <td></td>
+                    "
+                  else
+                    "
+                      <td>#{facilityCase.status()}</td>
+                      <td> 
+                        <a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{facilityCase.caseID}' title='Transfer'></a>
+                      </td>
+                    "
+                }
               </tr>
             "
           .join ""
@@ -40,7 +53,7 @@ class SummaryView extends Backbone.View
       </table>
 
       <h4 class='content_title'>Positive Individuals From Facility Cases:</h4>
-      <table id='summary' class='tablesorter hover'>
+      <table id='positiveIndividualsTable' class='tablesorter hover'>
         <thead><tr>
           <th class='header'>Diagnosis Date</th>
           <th class='header'>Facility Case ID</th>

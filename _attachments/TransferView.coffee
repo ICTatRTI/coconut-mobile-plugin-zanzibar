@@ -34,19 +34,12 @@ class TransferView extends Backbone.View
       console.error "Could not save #{JSON.stringify updatedCaseResults}:"
       console.error error
     .then () ->
-      Coconut.syncView.sync.sendToCloud
+      await Coconut.syncView.sync.sendToCloud
         error: =>
           console.log "Sync failed, so transfers will be delayed until next sync."
         success: =>
-          Dialog.showDialog
-            title: "CASE TRANSFER",
-            text: "Case #{@caseID} has been successfully transferred to #{user}"
-            neutral:
-              title: "Continue"
-              onClick: (e) ->
-                dialog = $('#orrsDiag')
-                Dialog.hideDialog dialog, () ->
-                  Coconut.router.navigate("##{Coconut.databaseName}", true)
+          alert "Case #{@caseID} has been successfully transferred to #{user}"
+          Coconut.router.navigate "##{Coconut.databaseName}", trigger: true
 
   render: =>
     @$el.html "
@@ -100,10 +93,8 @@ class TransferView extends Backbone.View
     .catch (error) =>
       console.error error if error
     .then (result) =>
-      console.error error if error
-
       @caseResults = _.pluck(result.rows, "doc")
-      $("table#summary tbody").append(_(caseResults).map (caseResult) ->
+      $("table#summary tbody").append(_(@caseResults).map (caseResult) ->
         completed = if caseResult.complete == true then 'Yes' else 'No'
         "
           <tr>

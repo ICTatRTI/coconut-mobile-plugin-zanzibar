@@ -191,15 +191,20 @@ class Case
     result = {}
     _.each @possibleQuestions(), (question) =>
       if question is "Household Members"
-        if @["Household Members"]?
-          result["Household Members"] = true
-          _.each @["Household Members"], (member) ->
-            result["Household Members"] = false if member.complete isnt "true"
-        else
+        if @["Household Members"].length is 0
           result["Household Members"] = false
+        else
+          result["Household Members"] = true
+          _.each @["Household Members"]?, (member) ->
+            result["Household Members"] = false if (member.complete is "false" or member.complete is false)
+          unless @hasIndexCaseClassified() # Always need the index case to be classified
+            result["Household Members"] = false
       else
-        result[question] = (@[question]?.complete is "true")
+        result[question] = (@[question]?.complete is "true" or @[question]?.complete is true)
     return result
+
+  hasIndexCaseClassified: =>
+    @classificationsByHouseholdMemberType().match(/Index Case/)
 
   complete: =>
     @questionStatus()["Household Members"] is true
@@ -214,7 +219,10 @@ class Case
         returnVal = ""
         for question, status of @questionStatus()
           if status is false
-            returnVal = "#{question} In Progress"
+            returnVal = if question is "Household Members" and not @hasIndexCaseClassified()
+              "Household Members does not have a classified Index Case"
+            else
+              "#{question} In Progress"
             break
         returnVal
 
@@ -480,6 +488,25 @@ class Case
   daysFromSMSToCompleteHousehold: =>
     if @["Household"]?.complete is "true" and @["USSD Notification"]?
       moment.duration(@timeFromSMSToCompleteHousehold()).asDays()
+
+  classificationsByHouseholdMemberType: =>
+    _(for householdMember in @["Household Members"]
+      if householdMember.CaseCategory 
+        "#{householdMember.HouseholdMemberType}: #{householdMember.CaseCategory}"
+    ).compact().join(", ")
+
+  classificationsByDiagnosisDate: =>
+    _(for householdMember in @["Household Members"]
+      if householdMember.CaseCategory 
+        "#{householdMember.DateOfPositiveResults}: #{householdMember.CaseCategory}"
+    ).compact().join(", ")
+
+  evidenceForClassifications: =>
+    _(for householdMember in @["Household Members"]
+      if householdMember.CaseCategory 
+        "#{householdMember.CaseCategory}: #{householdMember.SummarizeEvidenceUsedForClassification}"
+    ).compact().join(", ")
+
 
   spreadsheetRow: (question) =>
     console.error "Must call loadSpreadsheetHeader at least once before calling spreadsheetRow" unless Coconut.spreadsheetHeader?

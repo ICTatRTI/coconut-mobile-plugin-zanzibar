@@ -185,7 +185,40 @@ Sync::transferCasesIn =  (options) ->
         transferCase.loadFromResultDocs(caseResultDocs)
         caseId = transferCase.MalariaCaseID()
         if confirm "Accept transfer case #{caseId} #{transferCase.indexCasePatientName()} from facility #{transferCase.facility()} in #{transferCase.district()}?"
+
+          # Due to bug that breaks replication for crypto pouch documents when they are replicated in, edited and replicated back, we have to
+          # 1. Delete them on the cloud database
+          # 2. Create new docs without _rev numbers (this is the workaround hack which forces replication)
+          # 3. Add the transfered information
+          # 4. Save them as new local documents
+          # 5. Replicate them to the cloud database
           caseResultIds = _(caseResultDocs).pluck "_id"
+          result = await Coconut.cloudDB.allDocs
+            keys: caseResultIds
+            include_docs: true
+          .catch (error) => console.error error
+
+          docsToSave = for row in result.rows
+            await Coconut.cloudDB.remove(row.doc) #1
+            delete row.doc._rev #2
+            row.doc.transferred[row.doc.transferred.length - 1].received = true #3
+            row.doc
+
+          await Coconut.database.bulkDocs docsToSave
+          .catch (error) => console.error error
+
+          await Coconut.database.replicate.to Coconut.cloudDB,
+            doc_ids: caseResultIds
+          .catch (error) => 
+            console.error error
+            @log "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
+            throw "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
+
+      options?.success()
+      resolve()
+
+
+          ###
           await Coconut.cloudDB.replicate.to Coconut.database,
             doc_ids: caseResultIds
           .catch (error) => 
@@ -197,6 +230,9 @@ Sync::transferCasesIn =  (options) ->
               await Coconut.database.upsert caseResultId, (caseResultDoc) =>
                 caseResultDoc.transferred[caseResultDoc.transferred.length - 1].received = true
                 caseResultDoc
+
+
+
             Coconut.cloudDB.replicate.from Coconut.database,
               doc_ids: caseResultIds
             .catch (error) => 
@@ -207,5 +243,4 @@ Sync::transferCasesIn =  (options) ->
               console.log replicationResult
               @log "#{caseId} (#{caseResultIds.join()}): saved on device and updated in cloud"
               Promise.resolve()
-      options?.success()
-      resolve()
+          ###
