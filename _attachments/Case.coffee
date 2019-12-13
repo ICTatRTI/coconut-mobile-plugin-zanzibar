@@ -145,29 +145,66 @@ class Case
     returnVal = @validShehia()
     return returnVal if returnVal?
 
-    console.warn "No valid shehia found for case: #{@MalariaCaseID()} result will be either null or unknown"
+    console.warn "No valid shehia found for case: #{@MalariaCaseID()} result will be either null or unknown."
 
     # If no valid shehia is found, then return whatever was entered (or null)
-    @.Household?.Shehia || @.Facility?.Shehia || @["USSD Notification"]?.shehia
+    @.Household?.Shehia || @.Facility?.Shehia || @["Case Notification"]?.shehia || @["USSD Notification"]?.shehia
+
+  village: ->
+    @["Facility"]?.Village
+
+  facilityDistrict: ->
+    facilityDistrict = @["Case Notification"]?.DistrictForFacility or @["USSD Notification"]?.facility_district
+    unless facilityDistrict and GeoHierarchy.validDistrict(facilityDistrict)
+      facilityUnit = GeoHierarchy.findFirst(@facility(), "FACILITY")
+      facilityDistrict = facilityUnit?.ancestorAtLevel("DISTRICT").name
+    unless facilityDistrict
+      console.warn "Could not find a district for USSD notification: #{JSON.stringify @["USSD Notification"]}"
+      return "UNKNOWN"
+    GeoHierarchy.swahiliDistrictName(facilityDistrict)
+
+  householdDistrict: =>
+    if @.Household?.District and GeoHierarchy.findOneMatchOrUndefined(@.Household.District, "DISTRICT")
+      @.Household.District
+
+  shehiaDistrict: =>
+    if @.Facility?.DistrictForShehia? and GeoHierarchy.findOneMatchOrUndefined(@.Facility?.DistrictForShehia, "DISTRICT")
+      @.Facility.DistrictForShehia
+    else if @["Case Notification"]?.DistrictForShehia and GeoHierarchy.findOneMatchOrUndefined(@["Case Notification"]?.DistrictForShehia, "DISTRICT")
+      @["Case Notification"]?.DistrictForShehia
 
   # Want best guess for the district - try and get a valid shehia, if not use district for reporting facility
   district: ->
+    householdOrShehiaDistrict = @householdDistrict() or @shehiaDistrict()
+    return householdOrShehiaDistrict if householdOrShehiaDistrict
+
+    # Legacy way of determining district
     shehia = @validShehia()
     if shehia?
-      return GeoHierarchy.findOneShehia(shehia).DISTRICT
-    else
-      console.warn "#{@MalariaCaseID()}: No valid shehia found, using district of reporting health facility (which may not be where the patient lives)"
-      district = GeoHierarchy.swahiliDistrictName @["USSD Notification"]?.facility_district
-      if _(GeoHierarchy.allDistricts()).include district
-        return district
+
+      findOneShehia = GeoHierarchy.findOneShehia(shehia)
+      if findOneShehia
+        return findOneShehia.parent().name
       else
-        console.warn "#{@MalariaCaseID()}: The reported district (#{district}) used for the reporting facility is not a valid district. Looking up the district for the health facility name."
-        district = GeoHierarchy.swahiliDistrictName(FacilityHierarchy.getDistrict @["USSD Notification"]?.hf)
-        if _(GeoHierarchy.allDistricts()).include district
-          return district
+        shehias = GeoHierarchy.findShehia(shehia)
+        facilityDistrict = @facilityDistrict()
+        shehiaWithSameFacilityDistrict = _(shehias).find (shehia) ->
+          shehia.parent().name is facilityDistrict
+        if shehiaWithSameFacilityDistrict
+          return shehiaWithSameFacilityDistrict.parent().name
         else
-          console.warn "#{@MalariaCaseID()}: The health facility name (#{@["USSD Notification"]?.hf}) is not valid. Giving up and returning UNKNOWN."
-          return "UNKNOWN"
+          console.warn "#{@MalariaCaseID()}: Shehia #{shehia} is not unique, and the facility's district '#{facilityDistrict}' doesn't match the possibilities. It's possible districts are: #{(_(shehias).map (shehia) -> shehia.parent().name).join(', ')}. Using Facility District: #{facilityDistrict}." 
+          return facilityDistrict
+
+    else
+      console.warn "#{@MalariaCaseID()}: No valid shehia found, using district of reporting health facility (which may not be where the patient lives). Data from USSD Notification: #{JSON.stringify(@["USSD Notification"])}"
+
+      facilityDistrict = @facilityDistrict()
+
+      if facilityDistrict
+        facilityDistrict
+      else
+        return "UNKNOWN"
 
   highRiskShehia: (date) =>
     date = moment().startOf('year').format("YYYY-MM") unless date
@@ -550,16 +587,13 @@ class Case
       console.error "#{result.question} already exists for:"
       console.error @
       return
-    console.debug result
     resultQuestion = result.question
     Coconut.database.post result
     .then (result) =>
-      console.log "saved"
-      console.debug result
+      console.log "saved:"
+      console.log result
       @questions.push result.question
       @[result.question] = result
-      console.debug @
-      console.debug window.malariaCase
       Coconut.headerView.update()
       Coconut.showNotification( "#{resultQuestion} record created")
     .catch (error) ->
@@ -589,7 +623,9 @@ class Case
       _id: "result-case-#{@caseID}-Facility-#{radix64.encodeInt(moment().format('x'))}-#{Coconut.instanceId}"
       question: "Facility"
       MalariaCaseID: @caseID
+      DistrictForFacility: @facilityDistrict()
       FacilityName: @facility()
+      DistrictForShehia: @shehiaDistrict()
       Shehia: @shehia()
       collection: "result"
       createdAt: moment(new Date()).format(Coconut.config.get "date_format")
@@ -602,6 +638,7 @@ class Case
       Reasonforvisitinghousehold: "Index Case Household"
       MalariaCaseID: @caseID
       HeadOfHouseholdName: @Facility.HeadOfHouseholdName
+      District: @district()
       Shehia: @shehia()
       Village: @Facility.Village
       ShehaMjumbe: @Facility.ShehaMjumbe

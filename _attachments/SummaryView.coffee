@@ -79,7 +79,7 @@ class SummaryView extends Backbone.View
       </table>
 
     "
-    $("table#summary").DataTable
+    @$("table#summary").DataTable
       retrieve: true
       aaSorting: [[0,"desc"]]
       scrollX: true
@@ -87,8 +87,8 @@ class SummaryView extends Backbone.View
       dom: '<lf<t>ip>'
       iDisplayLength: 25
       drawCallback: () ->
-        $(".dataTables_scrollHeadInner").css("width":"100%")
-        $(".dataTable.no-footer").css("width":"100%")
+        @$(".dataTables_scrollHeadInner").css("width":"100%")
+        @$(".dataTable.no-footer").css("width":"100%")
 
 
   css: => "

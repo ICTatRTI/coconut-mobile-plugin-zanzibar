@@ -1,7 +1,6 @@
 # Use global to enable calling this from question sets
 DHISHierarchy = require './DHISHierarchy'
 GeoHierarchyClass = require './GeoHierarchy'
-#global.FacilityHierarchy = new (require './FacilityHierarchy')()
 global.Case = require './Case'
 global.HouseholdLocationSelectorView = require './HouseholdLocationSelectorView'
 global.SummaryView = require './SummaryView'
@@ -19,17 +18,10 @@ onStartup = ->
 
     await Case.setup()
 
-    console.log "Loading DHIS2 Hierarchy"
+    global.GeoHierarchy = new GeoHierarchyClass()
+    await GeoHierarchy.load()
 
-    dhisHierarchy = new DHISHierarchy()
-    dhisHierarchy.loadExtendExport
-      dhisDocumentName: "dhis2" # This is the document that was exported from DHIS2
-      error: (error) -> console.error error
-      success: (result) ->
-        global.GeoHierarchy = new GeoHierarchyClass(result)
-        global.FacilityHierarchy = GeoHierarchy # These have been combined
-        console.log "DHIS2 Hierarchy Loaded"
-        resolve()
+    resolve()
 
 global.StartPlugins = [] unless StartPlugins?
 StartPlugins.push onStartup

@@ -18,28 +18,39 @@ class TransferView extends Backbone.View
       $('button#transfer_button').prop('disabled', true)
 
   transfer: =>
-    user = $('select').find(":selected").text()
-    updatedCaseResults = _(@caseResults).map (caseResult) ->
-#      Coconut.debug "Marking #{caseResult._id} as transferred"
-      (caseResult.transferred ?= []).push
-        from: Coconut.currentUser.get("_id")
-        to: $('select').find(":selected").attr "id"
-        time: moment().format("YYYY-MM-DD HH:mm")
-        notifiedViaSms: []
-        received: false
-      caseResult
+    Coconut.checkForInternet
+      error: -> alert "Can't connect to internet, transfers require a connection"
+      success: =>
+        user = $('select').find(":selected").text()
+        # See SyncPlugins. These results will be deleted from Cloud when the person receiving the transfer accepts them
+        updatedCaseResults = _(@caseResults).map (caseResult) ->
+    #      Coconut.debug "Marking #{caseResult._id} as transferred"
+          (caseResult.transferred ?= []).push
+            from: Coconut.currentUser.get("_id")
+            to: $('select').find(":selected").attr "id"
+            time: moment().format("YYYY-MM-DD HH:mm")
+            notifiedViaSms: []
+            received: false
+          console.log caseResult
+          caseResult
 
-    Coconut.database.bulkDocs {docs: updatedCaseResults}
-    .catch (error) ->
-      console.error "Could not save #{JSON.stringify updatedCaseResults}:"
-      console.error error
-    .then () ->
-      await Coconut.syncView.sync.sendToCloud
-        error: =>
-          console.log "Sync failed, so transfers will be delayed until next sync."
-        success: =>
-          alert "Case #{@caseID} has been successfully transferred to #{user}"
-          Coconut.router.navigate "##{Coconut.databaseName}", trigger: true
+        Coconut.database.bulkDocs updatedCaseResults
+        .catch (error) ->
+          console.error "Could not save #{JSON.stringify updatedCaseResults}:"
+          console.error error
+        .then () =>
+          await Coconut.syncView.sync.sendToCloud
+            error: =>
+              console.log "Sync failed, so transfers will be delayed until next sync."
+            success: =>
+              # Delete local version of results See testRemoveAndReplicateBack.coffee
+              # This allows cases to be transferred back (when they will be a new document with same doc id but different rev history)
+              # Since we have deleted this doc any new revision of the doc will be allowed
+
+              for caseResult in @caseResults
+                await Coconut.database.remove(await Coconut.database.get caseResult._id)
+              alert "Case #{@caseID} has been successfully transferred to #{user}"
+              Coconut.router.navigate "##{Coconut.databaseName}", trigger: true
 
   render: =>
     @$el.html "

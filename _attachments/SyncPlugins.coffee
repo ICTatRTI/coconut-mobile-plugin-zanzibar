@@ -124,6 +124,7 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
         result = new Result
           question: "Case Notification"
           MalariaCaseID: notification.caseid
+          DistrictForFacility: notification.facility_district
           FacilityName: notification.hf
           Shehia: notification.shehia
           Name: notification.name
@@ -178,15 +179,18 @@ Sync::transferCasesIn =  (options) ->
       if _(transferCases).isEmpty()
         @log "No cases to transfer."
         options?.success()
-        resolve()
+        return resolve()
 
       for caseID, caseResultDocs of transferCases
         transferCase = new Case()
         transferCase.loadFromResultDocs(caseResultDocs)
+        console.log transferCase
+        console.log "ZZZZ"
         caseId = transferCase.MalariaCaseID()
         if confirm "Accept transfer case #{caseId} #{transferCase.indexCasePatientName()} from facility #{transferCase.facility()} in #{transferCase.district()}?"
 
-          # Due to bug that breaks replication for crypto pouch documents when they are replicated in, edited and replicated back, we have to
+          # Due to bug that breaks replication for crypto pouch documents when they are replicated in, edited and replicated back, we have to (see failCrypto.coffee)
+          # 
           # 1. Delete them on the cloud database
           # 2. Create new docs without _rev numbers (this is the workaround hack which forces replication)
           # 3. Add the transfered information
