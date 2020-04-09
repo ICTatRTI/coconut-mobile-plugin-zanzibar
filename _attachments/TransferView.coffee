@@ -90,13 +90,15 @@ class TransferView extends Backbone.View
       </div>
     "
 
-    Coconut.database.query "usersByDistrict", {},
-      (error,result) ->
-        $("#content select").append(_(result.rows).map (user) ->
-          return "" unless user.key?
-          "<option id='#{user.id}'>#{user.key} - #{user.value.join(' -  ')}</option>"
-        .join ""
-        )
+    Coconut.database.query "usersByDistrict",
+      include_docs: true
+    .then (result) ->
+      $("#content select").append(_(result.rows).map (user) ->
+        return "" unless user.key? or user.doc.inactive
+        return "" if user.key is ""
+        "<option id='#{user.id}'>#{user.key} - #{user.value.join(' -  ')}</option>"
+      .join ""
+      )
 
     Coconut.database.query "cases",
       key: @caseID
