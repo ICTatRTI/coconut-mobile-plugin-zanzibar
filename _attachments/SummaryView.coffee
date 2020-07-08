@@ -6,6 +6,7 @@ class SummaryView extends Backbone.View
       <style>#{@css()}</style>
 
       <h4 class='content_title'>Facility Cases For Past Month on Tablet:</h4>
+      (note that only cases with a complete facility visit may be transferred)<br/>
       <table id='summary' class='tablesorter hover'>
         <thead><tr>
           <th class='header'>Diagnosis Date</th>
@@ -41,7 +42,14 @@ class SummaryView extends Backbone.View
                     "
                       <td>#{facilityCase.status()}</td>
                       <td> 
-                        <a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{facilityCase.caseID}' title='Transfer'></a>
+                        #{
+                          if facilityCase.hasCompleteFacility()
+                            "<a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{facilityCase.caseID}' title='Transfer'></a>"
+                          else
+                            ""
+                        
+
+                        }
                       </td>
                     "
                 }

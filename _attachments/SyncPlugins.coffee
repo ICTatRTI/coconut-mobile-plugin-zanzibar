@@ -16,16 +16,16 @@ Sync::getFromCloud = (options) ->
         success: =>
           @fetch
             success: =>
-              $("#status").html "Getting new notifications..."
-              @getNewNotifications
+              $("#status").html "Updating users and forms. Please wait."
+              @replicateApplicationDocs
+                error: (error) =>
+                  @log "ERROR updating application: #{JSON.stringify(error)}"
+                  @save
+                    last_get_success: false
+                  options?.error?(error)
                 success: =>
-                  $("#status").html "Updating users and forms. Please wait."
-                  @replicateApplicationDocs
-                    error: (error) =>
-                      @log "ERROR updating application: #{JSON.stringify(error)}"
-                      @save
-                        last_get_success: false
-                      options?.error?(error)
+                  $("#status").html "Getting new notifications..."
+                  @getNewNotifications
                     success: =>
                       @transferCasesIn()
                       .catch (error) => @log error
@@ -54,62 +54,55 @@ Sync::getNewNotifications = (options) ->
       else
         dateToStartLooking = (new moment).subtract(3,'months').format(Coconut.config.get("date_format"))
 
+      @log "Looking for USSD notifications without Case Notifications after #{dateToStartLooking}. Please wait."
 
-      Coconut.database.get "district_language_mapping"
-      .catch (error) -> alert "Couldn't find english_to_swahili map: #{JSON.stringify result}"
+      Coconut.cloudDB.query "rawNotificationsNotConvertedToCaseNotifications",
+        include_docs: true
+        startkey: dateToStartLooking
+        skip: 1
+      .catch (error) => @log "ERROR, could not download USSD notifications: #{JSON.stringify error}"
       .then (result) =>
-        district_language_mapping = result.english_to_swahili
+        currentUserDistricts = Coconut.currentUser.get("district")
+        # Make sure district is valid (shouldn't be necessary)
+        currentUserDistricts = for district in currentUserDistricts
+          GeoHierarchy.findFirst(district, "DISTRICT")?.name or alert "Invalid district #{district} for #{JSON.stringify Coconut.currentUser}"
 
-        @log "Looking for USSD notifications without Case Notifications after #{dateToStartLooking}. Please wait."
+        @log "Found #{result.rows?.length} USSD notifications. Filtering for USSD notifications for district(s):  #{currentUserDistricts}. Please wait."
+        acceptedNotificationIds = []
+        for row in result.rows
+          notification = row.doc
 
-        Coconut.cloudDB.query "rawNotificationsNotConvertedToCaseNotifications",
-          include_docs: true
-          startkey: dateToStartLooking
-          skip: 1
-        .catch (error) => @log "ERROR, could not download USSD notifications: #{JSON.stringify error}"
-        .then (result) =>
-          currentUserDistrict = Coconut.currentUser.get("district")
+          districtForNotification = notification.facility_district
 
-          if district_language_mapping[currentUserDistrict]?
-            currentUserDistrict = district_language_mapping[currentUserDistrict]
+          districtForNotification = GeoHierarchy.findFirst(districtForNotification, "DISTRICT")?.name or alert "Invalid district for notification: #{districtForNotification}"
 
-          @log "Found #{result.rows?.length} USSD notifications. Filtering for USSD notifications for district:  #{currentUserDistrict}. Please wait."
-          acceptedNotificationIds = []
-          for row in result.rows
-            notification = row.doc
+          # Try and fix shehia, district and facility names. Use levenshein distance
 
-            districtForNotification = notification.facility_district
-
-            if district_language_mapping[districtForNotification]?
-              districtForNotification = district_language_mapping[districtForNotification]
-
-            # Try and fix shehia, district and facility names. Use levenshein distance
-
+          unless _(GeoHierarchy.allDistricts()).contains districtForNotification
+            @log "#{districtForNotification} not valid district, trying to use health facility: #{notification.hf} to identify district"
+            if GeoHierarchy.getDistrict(notification.hf)?
+              districtForNotification = GeoHierarchy.getDistrict(notification.hf)
+              @log "Using district: #{districtForNotification} indicated by health facility."
+            else
+              @log "Can't find a valid district for health facility: #{notification.hf}"
+            # Check it again
             unless _(GeoHierarchy.allDistricts()).contains districtForNotification
-              @log "#{districtForNotification} not valid district, trying to use health facility: #{notification.hf} to identify district"
-              if GeoHierarchy.getDistrict(notification.hf)?
-                districtForNotification = GeoHierarchy.getDistrict(notification.hf)
-                @log "Using district: #{districtForNotification} indicated by health facility."
+              @log "#{districtForNotification} still not valid district, trying to use shehia name to identify district: #{notification.shehia}"
+              if GeoHierarchy.findOneShehia(notification.shehia)?
+                districtForNotification = GeoHierarchy.findOneShehia(notification.shehia).DISTRCT
+                @log "Using district: #{districtForNotification} indicated by shehia."
               else
-                @log "Can't find a valid district for health facility: #{notification.hf}"
-              # Check it again
-              unless _(GeoHierarchy.allDistricts()).contains districtForNotification
-                @log "#{districtForNotification} still not valid district, trying to use shehia name to identify district: #{notification.shehia}"
-                if GeoHierarchy.findOneShehia(notification.shehia)?
-                  districtForNotification = GeoHierarchy.findOneShehia(notification.shehia).DISTRCT
-                  @log "Using district: #{districtForNotification} indicated by shehia."
-                else
-                  @log "Can't find a valid district using shehia for notification: #{JSON.stringify notification}."
+                @log "Can't find a valid district using shehia for notification: #{JSON.stringify notification}."
 
-            if districtForNotification is currentUserDistrict
+          if _(currentUserDistricts).contains districtForNotification
 
-              if confirm "Accept new case? Facility: #{notification.hf}, Shehia: #{notification.shehia}, Name: #{notification.name}, ID: #{notification.caseid}, date: #{notification.date}. You may need to coordinate with another DMSO."
-                acceptedNotificationIds.push(notification._id)
-                @log "Case notification #{notification.caseid}, accepted by #{Coconut.currentUser.username()}"
-              else
-                @log "Case notification #{notification.caseid}, not accepted by #{Coconut.currentUser.username()}"
-          @convertNotificationsToCaseNotification(acceptedNotificationIds).then =>
-            options.success?()
+            if confirm "Accept new case? Facility: #{notification.hf}, Shehia: #{notification.shehia}, District: #{districtForNotification}, Name: #{notification.name}, ID: #{notification.caseid}, date: #{notification.date}. You may need to coordinate with another DMSO."
+              acceptedNotificationIds.push(notification._id)
+              @log "Case notification #{notification.caseid}, accepted by #{Coconut.currentUser.username()}"
+            else
+              @log "Case notification #{notification.caseid}, not accepted by #{Coconut.currentUser.username()}"
+        @convertNotificationsToCaseNotification(acceptedNotificationIds).then =>
+          options.success?()
 
 Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
   new Promise (resolve, reject) =>
