@@ -14,7 +14,7 @@ ResultsView::render = ->
       _.delay((-> clickWhenAvailable(elementId)), 500)
 
   removeTransferredCases = =>
-    cases = await Case.getCases()
+    cases = await Case.getCasesSummaryData()
     transferredCases = {}
     for malariaCase in cases
       lastTransferEntry = _(malariaCase["Facility"]?.transferred).last()
@@ -37,3 +37,13 @@ ResultsView::render = ->
       
     
   clickWhenAvailable("not-complete-panel")
+
+  originalLoadResults = ResultsView::loadResults
+  ResultsView::loadResults = ->
+    originalLoadResults.apply(this,arguments)
+    # Disable delete for Case Notification so that cases don't accidentally get lost
+    # hack it with the delay
+    _.delay =>
+      if @question.id is "Case Notification" or @question.id is "Facility"
+        @$(".mdi-delete").hide()
+    , 1000

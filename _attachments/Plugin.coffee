@@ -15,6 +15,7 @@ onStartup = ->
     require './QuestionViewPlugins'
     require './ResultsViewPlugins'
     require './Form2jsPlugins'
+    Coconut.cachingDatabase = new PouchDB("coconut-zanzibar-caching")
 
     await Case.setup()
 

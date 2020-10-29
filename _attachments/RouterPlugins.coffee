@@ -9,7 +9,7 @@ Coconut.router._bindRoutes()
 Coconut.router.route ":database/summary", ->
   Coconut.summaryView ?= new SummaryView()
   oneMonthAgo = moment().subtract(1, "months").format("YYYY-MM-DD")
-  Case.getCases(oneMonthAgo, moment().format("YYYY-MM-DD"))
+  Case.getCasesSummaryData(oneMonthAgo, moment().format("YYYY-MM-DD"))
   .catch (error) =>
     console.error JSON.stringify error
   .then (cases) =>

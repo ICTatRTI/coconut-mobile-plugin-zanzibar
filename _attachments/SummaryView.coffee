@@ -11,8 +11,8 @@ class SummaryView extends Backbone.View
         <thead><tr>
           <th class='header'>Diagnosis Date</th>
           <th class='header'>Time Facility Notified</th>
-          <th class='header'>Time All Household Members Complete</th>
-          <th class='header'>Hours From Notification Until Household Complete</th>
+          <th class='header'>Time Followup Complete</th>
+          <th class='header'>Hours From Notification Until Complete</th>
           <th class='header'>ID</th>
           <th class='header'>Facility</th>
           <th class='header'>Status</th>
@@ -25,7 +25,7 @@ class SummaryView extends Backbone.View
               <tr>
                 <td>#{facilityCase.indexCaseDiagnosisDate()}</td>
                 <td>#{facilityCase.timeFacilityNotified()?[0..-4] or "-"}</td>
-                <td>#{facilityCase.timeAllHouseholdMembersComplete()?[0..-4] or "-"}</td>
+                <td>#{facilityCase.timeOfHouseholdComplete()?[0..-4] or "-"}</td>
                 <td>#{facilityCase.hoursFromNotificationToCompleteHousehold() or "-"}</td>
                 <td>#{facilityCase.caseID}</td>
                 <td>#{facilityCase.facility()}</td>
@@ -43,8 +43,8 @@ class SummaryView extends Backbone.View
                       <td>#{facilityCase.status()}</td>
                       <td> 
                         #{
-                          if facilityCase.hasCompleteFacility()
-                            "<a class='button mdi mdi-transfer mdi-24px' style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{facilityCase.caseID}' title='Transfer'></a>"
+                          if facilityCase.hasCompleteFacility() and not facilityCase.complete()
+                            "<a style='text-decoration:none' href='##{Coconut.databaseName}/transfer/#{facilityCase.caseID}' title='Transfer'>Transfer</a>"
                           else
                             ""
                         
@@ -66,18 +66,20 @@ class SummaryView extends Backbone.View
           <th class='header'>Diagnosis Date</th>
           <th class='header'>Facility Case ID</th>
           <th class='header'>Classification</th>
+          <th class='header'>Focal Shehia</th>
           <th class='header'>Evidence</th>
         </tr></thead>
         <tbody>
         #{
           _.map cases, (facilityCase) ->
-            _(facilityCase.allPositiveIndividualsForCase()).map (householdMember) =>
+            _(facilityCase.positiveIndividualObjects()).map (positiveIndividual) =>
               result = "
                 <tr>
-                  <td>#{householdMember.dateFoundPositive() or facilityCase.indexCaseDiagnosisDate()}</td>
-                  <td>#{facilityCase.caseID}</td>
-                  <td>#{householdMember.doc["CaseCategory"]}</td>
-                  <td>#{householdMember.doc["SummarizeEvidenceUsedForClassification"]}</td>
+                  <td>#{positiveIndividual.dateOfPositiveResults()}</td>
+                  <td>#{positiveIndividual.data.MalariaCaseID}</td>
+                  <td>#{positiveIndividual.classification()}</td>
+                  <td>#{positiveIndividual.focalShehia()}</td>
+                  <td>#{positiveIndividual.data.SummarizeEvidenceUsedForClassification}</td>
                 </tr>
               "
             .join ""
