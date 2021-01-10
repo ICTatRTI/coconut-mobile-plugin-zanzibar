@@ -18,21 +18,14 @@ ResultsView::render = ->
     transferredCases = {}
     for malariaCase in cases
       lastTransferEntry = _(malariaCase["Facility"]?.transferred).last()
-      console.log lastTransferEntry
       if lastTransferEntry?.from is Coconut.currentUser.id
         transferredCases[malariaCase.caseID] = true
 
-    console.log transferredCases
-
     indexOfCaseId = $("th:contains(Malaria Case ID)").index()
     for row in $(".results tbody tr")
-      console.log "ZZZ"
       id = $(row).find("td")[indexOfCaseId]?.innerText
-      console.log id
-      console.log transferredCases[id]
       if transferredCases[id]
         for td in $(row).find("td")
-          #console.log td.innerText
           $(td).html("<span style='text-decoration:line-through'>#{td.innerText}</span>")
       
     

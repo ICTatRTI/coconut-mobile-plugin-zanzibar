@@ -12,6 +12,7 @@ onStartup = ->
     require './RouterPlugins'
     require './HeaderViewPlugins'
     require './MenuViewPlugins'
+    require './QuestionPlugins'
     require './QuestionViewPlugins'
     require './ResultsViewPlugins'
     require './Form2jsPlugins'
@@ -21,6 +22,7 @@ onStartup = ->
 
     global.GeoHierarchy = new GeoHierarchyClass()
     await GeoHierarchy.load()
+    await QuestionCollection?.load() # Reload questions to use QuestionPlugins
 
     resolve()
 

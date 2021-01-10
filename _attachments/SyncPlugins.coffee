@@ -74,7 +74,7 @@ Sync::getNewNotifications = (options) ->
 
           districtForNotification = notification.facility_district
 
-          districtForNotification = GeoHierarchy.findFirst(districtForNotification, "DISTRICT")?.name or alert "Invalid district for notification: #{districtForNotification}"
+          districtForNotification = GeoHierarchy.findFirst(districtForNotification, "DISTRICT")?.name or alert "Invalid district for notification: #{districtForNotification}\n#{JSON.stringify notification}"
 
           # Try and fix shehia, district and facility names. Use levenshein distance
 

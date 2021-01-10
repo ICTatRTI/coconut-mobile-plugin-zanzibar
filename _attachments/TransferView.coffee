@@ -118,15 +118,4 @@ class TransferView extends Backbone.View
         "
       .join "")
 
-      $("table#summary").DataTable
-        aaSorting: [[0,"desc"]]
-        scrollX: true
-        searching: false
-        paging: false
-        retrieve: true
-        info: false
-        drawCallback: () ->
-          $(".dataTables_scrollHeadInner").css("width":"100%")
-          $(".dataTable.no-footer").css("width":"100%")
-
 module.exports = TransferView
