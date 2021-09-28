@@ -1,7 +1,7 @@
 Dialog = require './js-libraries/modal-dialog'
 
 Sync::getFromCloud = (options) ->
-  $("#status").html "Getting data..."
+  $("#status").append "<br/>Getting data..."
   @fetch
     error: (error) =>
       @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
@@ -16,7 +16,7 @@ Sync::getFromCloud = (options) ->
         success: =>
           @fetch
             success: =>
-              $("#status").html "Updating users and forms. Please wait."
+              $("#status").append "<br/>Updating users and forms. Please wait."
               @replicateApplicationDocs
                 error: (error) =>
                   @log "ERROR updating application: #{JSON.stringify(error)}"
@@ -24,7 +24,7 @@ Sync::getFromCloud = (options) ->
                     last_get_success: false
                   options?.error?(error)
                 success: =>
-                  $("#status").html "Getting new notifications..."
+                  $("#status").append "<br/>Getting new notifications..."
                   @getNewNotifications
                     success: =>
                       @transferCasesIn()
@@ -41,6 +41,39 @@ Sync::getFromCloud = (options) ->
 
 Sync::getNewNotifications = (options) ->
   new Promise (resolve, reject) =>
+
+    $("#status").append "<br/>Looking for new facility notifications..."
+
+    notificationsForUsersDistricts = await Coconut.notificationsDB.query "unacceptedNotificationsByDateAndDistrict",
+      include_docs: true
+    .then (result) =>
+      currentUserDistricts = (Coconut.currentUser.district() or []).filter (district) => 
+        GeoHierarchy.validDistrict(district)
+
+      Promise.resolve(
+        result.rows.reduce (relevantNotifications, row) => 
+          district = row.key[1]
+          relevantNotifications.push(row.doc) if currentUserDistricts.includes(district)
+          relevantNotifications
+        , []
+      )
+
+    acceptedNotificationIds = []
+
+    for notification in notificationsForUsersDistricts
+
+      if confirm "Accept new case? Facility: #{notification.Facility} (#{notification["Facility District"]}), Patient Shehia: #{notification["Patient Shehia"]}, Name: #{notification["Patient Last Name"]}, ID: #{notification._id?.split("-").pop()}, Date and time of positive results: #{notification["Date of Positive Result"]} #{notification["Time of Positive Result"]}. You may need to coordinate with another DMSO."
+        acceptedNotificationIds.push(notification._id)
+        $("#status").append "<br/>Case notification #{notification._id}, accepted by #{Coconut.currentUser.username()}"
+      else
+
+    await @convertNotificationsToCaseNotification(acceptedNotificationIds, Coconut.notificationsDB)
+
+    #### LEGACY NOTIFICATIONS ####
+
+
+
+
     @log "Looking for most recent Case Notification on device. Please wait."
     Coconut.database.query "rawNotificationsConvertedToCaseNotifications",
       descending: true
@@ -104,7 +137,7 @@ Sync::getNewNotifications = (options) ->
         @convertNotificationsToCaseNotification(acceptedNotificationIds).then =>
           options.success?()
 
-Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
+Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notificationsDB = Coconut.cloudDB) ->
   new Promise (resolve, reject) =>
     console.log "Accepted: #{acceptedNotificationIds.join(',')}"
 
@@ -112,15 +145,21 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
 
     newCaseNotificationIds = []
     for notificationId in acceptedNotificationIds
-      await Coconut.cloudDB.get notificationId
+      await notificationsDB.get notificationId
       .then (notification) =>
         result = new Result
           question: "Case Notification"
-          MalariaCaseID: notification.caseid
-          DistrictForFacility: notification.facility_district
-          FacilityName: notification.hf
-          Shehia: notification.shehia
-          Name: notification.name
+          MalariaCaseID: notification.caseid or notification._id?.split("-").pop() #Get everything after last - to get ID part of _id
+          DistrictForFacility: notification.facility_district or notification["Facility District"]
+          FacilityName: notification.hf or notification.Facility
+          DistrictForShehia: notification["Patient District"]
+          Shehia: notification.shehia or notification["Patient Shehia"]
+          Name: notification.name or notification["Patient Name"]
+          Sex: notification.Sex
+          Age: notification.Age
+          AgeInYearsMonthsDays: notification["Age in Years/Months/Days"]
+          DateAndTimeOfPositiveResults: "#{notification["Date of Positive Result"]}T#{notification["Time of Positive Result"]}"
+          CaseCategory: notification["Case Category"]
           NotificationDocumentID: notificationId
         result.save()
         .catch (error) =>
@@ -128,7 +167,7 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
         .then =>
           notification.hasCaseNotification = true
           notification.caseNotification = result.get "_id"
-          Coconut.cloudDB.put notification
+          notificationsDB.put notification
           .catch (error) =>
             alert "Error marking notification as accepted (someone else may have accepted it), canceling acceptance of case #{notification.caseid}"
             result.destroy() #Ideally would use callbacks or promises here but they don't work well
@@ -139,9 +178,9 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
     Coconut.database.replicate.to Coconut.cloudDB,
       doc_ids: newCaseNotificationIds
     .catch (error) =>
-      @log "Error replicating #{newCaseNotificationIds} back to server: #{JSON.stringify error}"
+      $("#status").append "<br/>Error replicating #{newCaseNotificationIds} back to server: #{JSON.stringify error}"
     .then (result) =>
-      @log "Sent docs: #{newCaseNotificationIds}"
+      $("#status").append "<br/>Sent docs: #{newCaseNotificationIds}"
       @save
         last_send_result: result
         last_send_error: false
@@ -151,7 +190,7 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds) ->
 Sync::transferCasesIn =  (options) ->
   console.error "callback for transferCasesIn will be deprecated" if options?
   new Promise (resolve, reject) =>
-    $("#status").html "Checking for transfer cases..."
+    $("#status").append "<br/>Checking for transfer cases..."
     @log "Checking cloud server for cases transferred to #{Coconut.currentUser.username()}"
     Coconut.cloudDB.query "resultsAndNotificationsNotReceivedByTargetUser",
       include_docs: true
@@ -241,3 +280,125 @@ Sync::transferCasesIn =  (options) ->
               @log "#{caseId} (#{caseResultIds.join()}): saved on device and updated in cloud"
               Promise.resolve()
           ###
+          #
+          #
+          #
+
+Sync::sendToCloud =  (options) ->
+  @fetch
+    error: (error) =>
+      @log "Unable to fetch Sync doc: #{JSON.stringify(error)}"
+      options?.error?(error)
+    success: =>
+      Coconut.checkForInternet
+        error: (error) =>
+          @save
+            last_send_error: true
+          options?.error?(error)
+          Coconut.noInternet()
+        success: =>
+          $("#status").append "<br/>Creating list of all results on the mobile device. Please wait."
+          await Coconut.database.query "results", {},
+            (error,result) =>
+              if error
+                console.log "Could not retrieve list of results: #{JSON.stringify(error)}"
+                $("#status").append "<br/>ERROR: Could not retrieve list of results: #{JSON.stringify(error)}"
+                options?.error?(error)
+                @save
+                  last_send_error: true
+              else
+                resultIDs = if options.completeResultsOnly? and options.completeResultsOnly is true
+                  _.chain(result.rows)
+                  .filter (row) ->
+                    row.key[1] is true # Only get complete results
+                  .pluck("id").value()
+                else
+                  _.pluck result.rows, "id"
+
+                $("#status").append "<br/>Synchronizing #{resultIDs.length} results. Please wait."
+
+                Coconut.database.replicate.to Coconut.cloudDB,
+                  doc_ids: resultIDs
+                  timeout: 60000
+                  batch_size: 20
+                .on 'complete', (info) =>
+                  @log "Success! Send data finished: created, updated or deleted #{info.docs_written} results on the server."
+                  alert "Success! Send data finished: created, updated or deleted #{info.docs_written} results on the server."
+                  @save
+                    last_send_result: result
+                    last_send_error: false
+                    last_send_time: new Date().getTime()
+                  Promise.resolve()
+                .on 'error', (error) ->
+                  $("#status").append "<br/>ERROR: While replicating results to server: #{JSON.stringify error}"
+                  console.error error
+                  Promise.reject()
+                  options.error(error)
+                .on 'change', (changes) =>
+                  $("#status").append "<br/>Sync update: #{JSON.stringify changes}"
+
+
+          ###
+          # EXAMPLE ACTION ON SYNC
+          millisecondsSinceBeginningOf2021 = moment().format('x') - moment("2021-01-01").format('x')
+          millisecondsEncodedAsBase32 = bases.toBase32(millisecondsSinceBeginningOf2021)
+
+          Coconut.database.put
+            _id: "syncAction_#{Coconut.instanceId}_#{millisecondsEncodedAsBase32}"
+            action: "await fetch('https://lapq907iz0.execute-api.us-east-1.amazonaws.com/default/corsProxy?url=https://example.com')"
+            description: "Test Action"
+          ###
+
+          @log "Checking for outstanding actions on sync"
+          await Coconut.database.allDocs
+            startkey: "syncAction_"
+            endkey: "syncAction_\uf000"
+            include_docs: true
+          .then (result) =>
+            for row in result.rows
+              unless row.doc.complete
+                $("#status").append "<br/>Found sync action that needs to be done: #{JSON.stringify row.doc.action}"
+                console.log "Found sync action:"
+                console.log row.doc.action
+                # Format for coffeescript spacing
+                action = row.doc.action.replace(/\n/g,"\n      ")
+      
+                codeToEvalAsPromiseReturningFunction = """
+->
+new Promise (response) ->
+  response(
+    #{action}
+  )
+"""
+
+                try
+                  evaldFunction = await CoffeeScript.eval(codeToEvalAsPromiseReturningFunction, {bare:true})
+
+                  # Now execute the function
+                  await evaldFunction()
+                  .then (result) =>
+                    console.log "RESULT:"
+                    console.log result
+                    row.doc.complete = true
+                    row.doc.result = result
+                    row.doc.completeTime = moment().format("YYYY-MM-DD HH:mm:ss")
+                  .catch (error) =>
+                    $("#status").append "Error on sync action: #{JSON.stringify error}"
+                    console.error "Error on this sync action:"
+                    console.error codeToEvalAsPromiseReturningFunction
+                    console.error "Here's the error"
+                    console.error error
+
+                    row.doc.complete = false
+                    row.doc.error or= []
+                    row.doc.error.push error
+                  await Coconut.database.put row.doc
+
+                catch error
+                  console.error error
+            Promise.resolve()
+          Promise.resolve()
+          options?.success?()
+
+
+

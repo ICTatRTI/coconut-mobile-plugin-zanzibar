@@ -17,6 +17,7 @@ onStartup = ->
     require './ResultsViewPlugins'
     require './Form2jsPlugins'
     Coconut.cachingDatabase = new PouchDB("coconut-zanzibar-caching")
+    Coconut.notificationsDB = new PouchDB(Coconut.config.cloud_url_with_credentials_no_db() + "/notifications-#{Coconut.databaseName}")
 
     await Case.setup()
 

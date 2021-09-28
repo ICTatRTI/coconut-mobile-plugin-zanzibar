@@ -3,7 +3,7 @@
 MenuView::questionLinks = (option) ->
   Coconut.questions.fetch
     success: =>
-      menuIcons = { 'Case Notification':'wifi', 'Facility':'hospital', 'Household':'home-map-marker', 'Household Members':'account'}
+      menuIcons = { 'Case Notification':'wifi', 'Facility':'hospital', 'Household':'home-map-marker', 'Household Members':'account', 'Household Notification':"wifi"}
       $("#drawer_question_sets").html (Coconut.questions.map (question,index) ->
         return if question.id is "Time Outside Zanzibar"
         new_url = "##{Coconut.databaseName}/new/result/#{escape(question.id)}"
