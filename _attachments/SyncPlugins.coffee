@@ -47,7 +47,7 @@ Sync::getNewNotifications = (options) ->
     notificationsForUsersDistricts = await Coconut.notificationsDB.query "unacceptedNotificationsByDateAndDistrict",
       include_docs: true
     .then (result) =>
-      currentUserDistricts = (Coconut.currentUser.district() or []).filter (district) => 
+      currentUserDistricts = [Coconut.currentUser.district()].filter (district) => 
         GeoHierarchy.validDistrict(district)
 
       Promise.resolve(
@@ -68,12 +68,11 @@ Sync::getNewNotifications = (options) ->
       else
 
     await @convertNotificationsToCaseNotification(acceptedNotificationIds, Coconut.notificationsDB)
+    options?.success()
 
     #### LEGACY NOTIFICATIONS ####
 
-
-
-
+    ###
     @log "Looking for most recent Case Notification on device. Please wait."
     Coconut.database.query "rawNotificationsConvertedToCaseNotifications",
       descending: true
@@ -136,6 +135,7 @@ Sync::getNewNotifications = (options) ->
               @log "Case notification #{notification.caseid}, not accepted by #{Coconut.currentUser.username()}"
         @convertNotificationsToCaseNotification(acceptedNotificationIds).then =>
           options.success?()
+    ###
 
 Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notificationsDB = Coconut.cloudDB) ->
   new Promise (resolve, reject) =>
@@ -150,16 +150,16 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notific
         result = new Result
           question: "Case Notification"
           MalariaCaseID: notification.caseid or notification._id?.split("-").pop() #Get everything after last - to get ID part of _id
-          DistrictForFacility: notification.facility_district or notification["Facility District"]
-          FacilityName: notification.hf or notification.Facility
-          DistrictForShehia: notification["Patient District"]
-          Shehia: notification.shehia or notification["Patient Shehia"]
-          Name: notification.name or notification["Patient Name"]
-          Sex: notification.Sex
-          Age: notification.Age
-          AgeInYearsMonthsDays: notification["Age in Years/Months/Days"]
-          DateAndTimeOfPositiveResults: "#{notification["Date of Positive Result"]}T#{notification["Time of Positive Result"]}"
-          CaseCategory: notification["Case Category"]
+          DistrictForFacility: notification.facility_district or notification["Facility District"] or notification["facility-district"]
+          FacilityName: notification.hf or notification.Facility or notification["facility"]
+          DistrictForShehia: notification["Patient District"] or notification["district-for-shehia"]
+          Shehia: notification.shehia or notification["Patient Shehia"] or notification["shehia"]
+          Name: notification.name or notification["Patient Name"] or notification["full-name"]
+          Sex: notification.Sex or notification["sex"]
+          Age: notification.Age or notification["age"]
+          AgeInYearsMonthsDays: notification["Age in Years/Months/Days"] or notification["age-in-years-months-days"]
+          DateAndTimeOfPositiveResults: "#{notification["Date of Positive Result"]}T#{notification["Time of Positive Result"]}" or notification["date-and-time-of-positive-results"]
+          CaseCategory: notification["Case Category"] or notification["case-classification-categories"]
           NotificationDocumentID: notificationId
         result.save()
         .catch (error) =>
@@ -254,35 +254,43 @@ Sync::transferCasesIn =  (options) ->
       resolve()
 
 
-          ###
-          await Coconut.cloudDB.replicate.to Coconut.database,
-            doc_ids: caseResultIds
+      ###
+      await Coconut.cloudDB.replicate.to Coconut.database,
+        doc_ids: caseResultIds
+      .catch (error) => 
           .catch (error) => 
-            console.error error
-            @log "Failed to replicate from cloud a transfered case: #{transferCase.MalariaCaseID()}"
-            throw "Failed to replicate from cloud a transfered case: #{transferCase.MalariaCaseID()}"
-          .then =>
-            for caseResultId in caseResultIds
-              await Coconut.database.upsert caseResultId, (caseResultDoc) =>
-                caseResultDoc.transferred[caseResultDoc.transferred.length - 1].received = true
-                caseResultDoc
+      .catch (error) => 
+          .catch (error) => 
+      .catch (error) => 
+        console.error error
+        @log "Failed to replicate from cloud a transfered case: #{transferCase.MalariaCaseID()}"
+        throw "Failed to replicate from cloud a transfered case: #{transferCase.MalariaCaseID()}"
+      .then =>
+        for caseResultId in caseResultIds
+          await Coconut.database.upsert caseResultId, (caseResultDoc) =>
+            caseResultDoc.transferred[caseResultDoc.transferred.length - 1].received = true
+            caseResultDoc
 
 
 
-            Coconut.cloudDB.replicate.from Coconut.database,
-              doc_ids: caseResultIds
+        Coconut.cloudDB.replicate.from Coconut.database,
+          doc_ids: caseResultIds
+        .catch (error) => 
             .catch (error) => 
-              console.error error
-              @log "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
-              throw "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
-            .then (replicationResult) =>
-              console.log replicationResult
-              @log "#{caseId} (#{caseResultIds.join()}): saved on device and updated in cloud"
-              Promise.resolve()
-          ###
-          #
-          #
-          #
+        .catch (error) => 
+            .catch (error) => 
+        .catch (error) => 
+          console.error error
+          @log "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
+          throw "Failed to replicate to cloud a transfered case: #{transferCase.MalariaCaseID()}"
+        .then (replicationResult) =>
+          console.log replicationResult
+          @log "#{caseId} (#{caseResultIds.join()}): saved on device and updated in cloud"
+          Promise.resolve()
+      ###
+      #
+      #
+      #
 
 Sync::sendToCloud =  (options) ->
   @fetch
