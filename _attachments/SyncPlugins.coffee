@@ -61,81 +61,23 @@ Sync::getNewNotifications = (options) ->
     acceptedNotificationIds = []
 
     for notification in notificationsForUsersDistricts
+      DistrictForFacility = notification.facility_district or notification["Facility District"] or notification["facility-district"]
+      FacilityName = notification.hf or notification.Facility or notification["facility"]
+      Shehia = notification.shehia or notification["Patient Shehia"] or notification["shehia"]
+      if notification["Date of Positive Result"] and notification["Time of Positive Result"]
+        DateAndTimeOfPositiveResults = "#{notification["Date of Positive Result"]} #{notification["Time of Positive Result"]}" 
+      else if notification["date-and-time-of-positive-results"]
+        DateAndTimeOfPositiveResults = notification["date-and-time-of-positive-results"]
+      else
+        DateAndTimeOfPositiveResults = notification["Notification Creation Datetime"]
 
-      if confirm "Accept new case? Facility: #{notification.Facility} (#{notification["Facility District"]}), Patient Shehia: #{notification["Patient Shehia"]}, Name: #{notification["Patient Last Name"]}, ID: #{notification._id?.split("-").pop()}, Date and time of positive results: #{notification["Date of Positive Result"]} #{notification["Time of Positive Result"]}. You may need to coordinate with another DMSO."
+      if confirm "Accept new case? Facility: #{FacilityName} (#{DistrictForFacility}), Patient Shehia: #{Shehia}, Name: #{notification["last-name"]}, ID: #{notification._id?.split("-").pop()}, Date and time of positive results: #{DateAndTimeOfPositiveResults}. You may need to coordinate with another DMSO."
         acceptedNotificationIds.push(notification._id)
         $("#status").append "<br/>Case notification #{notification._id}, accepted by #{Coconut.currentUser.username()}"
-      else
 
     await @convertNotificationsToCaseNotification(acceptedNotificationIds, Coconut.notificationsDB)
+    await @convertNotificationsToFacility(acceptedNotificationIds, Coconut.notificationsDB)
     options?.success()
-
-    #### LEGACY NOTIFICATIONS ####
-
-    ###
-    @log "Looking for most recent Case Notification on device. Please wait."
-    Coconut.database.query "rawNotificationsConvertedToCaseNotifications",
-      descending: true
-      include_docs: true
-      limit: 1
-    .catch (error) => @log "Unable to find the the most recent case notification: #{JSON.stringify(error)}"
-    .then (result) =>
-      mostRecentNotification = result.rows?[0]?.doc.date
-      if mostRecentNotification? and moment(mostRecentNotification).isBefore((new moment).subtract(3,'weeks'))
-        dateToStartLooking = mostRecentNotification
-      else
-        dateToStartLooking = (new moment).subtract(3,'months').format(Coconut.config.get("date_format"))
-
-      @log "Looking for USSD notifications without Case Notifications after #{dateToStartLooking}. Please wait."
-
-      Coconut.cloudDB.query "rawNotificationsNotConvertedToCaseNotifications",
-        include_docs: true
-        startkey: dateToStartLooking
-        skip: 1
-      .catch (error) => @log "ERROR, could not download USSD notifications: #{JSON.stringify error}"
-      .then (result) =>
-        currentUserDistricts = Coconut.currentUser.get("district") or []
-        # Make sure district is valid (shouldn't be necessary)
-        currentUserDistricts = for district in currentUserDistricts
-          GeoHierarchy.findFirst(district, "DISTRICT")?.name or alert "Invalid district #{district} for #{JSON.stringify Coconut.currentUser}"
-
-        @log "Found #{result.rows?.length} USSD notifications. Filtering for USSD notifications for district(s):  #{currentUserDistricts}. Please wait."
-        acceptedNotificationIds = []
-        for row in result.rows
-          notification = row.doc
-
-          districtForNotification = notification.facility_district
-
-          districtForNotification = GeoHierarchy.findFirst(districtForNotification, "DISTRICT")?.name or alert "Invalid district for notification: #{districtForNotification}\n#{JSON.stringify notification}"
-
-          # Try and fix shehia, district and facility names. Use levenshein distance
-
-          unless _(GeoHierarchy.allDistricts()).contains districtForNotification
-            @log "#{districtForNotification} not valid district, trying to use health facility: #{notification.hf} to identify district"
-            if GeoHierarchy.getDistrict(notification.hf)?
-              districtForNotification = GeoHierarchy.getDistrict(notification.hf)
-              @log "Using district: #{districtForNotification} indicated by health facility."
-            else
-              @log "Can't find a valid district for health facility: #{notification.hf}"
-            # Check it again
-            unless _(GeoHierarchy.allDistricts()).contains districtForNotification
-              @log "#{districtForNotification} still not valid district, trying to use shehia name to identify district: #{notification.shehia}"
-              if GeoHierarchy.findOneShehia(notification.shehia)?
-                districtForNotification = GeoHierarchy.findOneShehia(notification.shehia).DISTRCT
-                @log "Using district: #{districtForNotification} indicated by shehia."
-              else
-                @log "Can't find a valid district using shehia for notification: #{JSON.stringify notification}."
-
-          if _(currentUserDistricts).contains districtForNotification
-
-            if confirm "Accept new case? Facility: #{notification.hf}, Shehia: #{notification.shehia}, District: #{districtForNotification}, Name: #{notification.name}, ID: #{notification.caseid}, date: #{notification.date}. You may need to coordinate with another DMSO."
-              acceptedNotificationIds.push(notification._id)
-              @log "Case notification #{notification.caseid}, accepted by #{Coconut.currentUser.username()}"
-            else
-              @log "Case notification #{notification.caseid}, not accepted by #{Coconut.currentUser.username()}"
-        @convertNotificationsToCaseNotification(acceptedNotificationIds).then =>
-          options.success?()
-    ###
 
 Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notificationsDB = Coconut.cloudDB) ->
   new Promise (resolve, reject) =>
@@ -154,13 +96,14 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notific
           FacilityName: notification.hf or notification.Facility or notification["facility"]
           DistrictForShehia: notification["Patient District"] or notification["district-for-shehia"]
           Shehia: notification.shehia or notification["Patient Shehia"] or notification["shehia"]
-          Name: notification.name or notification["Patient Name"] or notification["full-name"]
+          Name: notification.name or notification["Patient Name"] or notification["last-name"]
           Sex: notification.Sex or notification["sex"]
           Age: notification.Age or notification["age"]
           AgeInYearsMonthsDays: notification["Age in Years/Months/Days"] or notification["age-in-years-months-days"]
           DateAndTimeOfPositiveResults: "#{notification["Date of Positive Result"]}T#{notification["Time of Positive Result"]}" or notification["date-and-time-of-positive-results"]
           CaseCategory: notification["Case Category"] or notification["case-classification-categories"]
           NotificationDocumentID: notificationId
+          complete: true
         result.save()
         .catch (error) =>
           @log "Could not save #{result.toJSON()}:  #{JSON.stringify error}"
@@ -174,7 +117,6 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notific
           .then =>
             newCaseNotificationIds.push result.get "_id"
 
-
     Coconut.database.replicate.to Coconut.cloudDB,
       doc_ids: newCaseNotificationIds
     .catch (error) =>
@@ -185,7 +127,58 @@ Sync::convertNotificationsToCaseNotification = (acceptedNotificationIds, notific
         last_send_result: result
         last_send_error: false
         last_send_time: new Date().getTime()
-      resolve()
+    resolve()
+
+Sync::convertNotificationsToFacility = (acceptedNotificationIds, notificationsDB = Coconut.cloudDB) ->
+  new Promise (resolve, reject) =>
+    console.log "Accepted: #{acceptedNotificationIds.join(',')}"
+
+    return resolve() if _(acceptedNotificationIds).isEmpty()
+
+    for notificationId in acceptedNotificationIds
+      await notificationsDB.get notificationId
+      .then (notification) =>
+        result = new Result
+          question: "Facility"
+          MalariaCaseID: notification.caseid or notification._id?.split("-").pop() #Get everything after last - to get ID part of _id
+          DistrictForFacility: notification["facility-district"]
+          FacilityName: notification["facility"]
+          MalariaTestPerformed: notification["malaria-test-performed"]
+          DateAndTimeOfPositiveResults: notification["date-and-time-of-positive-results"]
+          MalariaMrdtTestResults: notification["malaria-mrdt-test-results"] or ""
+          MalariaMicroscopyTestResults: notification["malaria-microscopy-test-results"] or ""
+          ParasitesDensityPerL: notification["parasites-density-per-l"] or ""
+          ReferenceInOpdRegister: notification["reference-in-opd-register"]
+          FirstName: notification["first-name"] 
+          MiddleName: notification["middle-name"] or ""
+          LastName: notification["last-name"]
+          Age: notification["age"]
+          AgeInYearsMonthsDays: notification["age-in-years-months-days"]
+          Sex: notification["sex"]
+          DistrictForShehia: notification["district-for-shehia"]
+          Shehia: notification["shehia"]
+          Village: notification["village"]
+          ShehaMjumbe: notification["sheha-mjumbe"]
+          HeadOfHouseholdName: notification["head-of-household-name"]
+          ContactMobilePatientRelative: notification["contact-mobile-patient-relative"]
+          TypeOfTreatmentPrescribed: notification["treatment-prescribed"]
+          AsaqDoseAndStrength: notification["asaq-dose-and-strength"] or ""
+          AluDoseAndStrength: notification["alu-dose-and-strength"] or ""
+          InjectionArtesunateDoseAndStrength: notification["injection-artesunate-dose-and-strength"] or ""
+          InjectionArtemetherDoseAndStrength: notificaiton["injection-artemether-dose-and-strength"] or ""
+          DuoCotexinDoseAndStrength: notification["duo-cotexin-dose-and-strength"]
+          ClindamycinBaseDoseAndStrength: notification["clindamycin-base-dose-and-strength"] or ""
+          QuinineSulfateDoseAndStrength:  notification["quinine-sulfate-dose-and-strength"] or ""
+          OtherAntimalarialGiven: notification["other-antimalarial-given"] or ""
+          IfYesListAllPlacesTravelled: notification["if-yes-list-all-places-travelled"] or ""
+          PrimaquineDose: notification["primaquine-dose"] or ""
+          TravelledOvernightInPastMonth: notification["travelled-overnight-in-past-month"]
+          CaseCategory: notification["case-classification-categories"]
+        result.save()
+        .catch (error) =>
+          @log "Could not save #{result.toJSON()}:  #{JSON.stringify error}"
+        .then =>
+          resolve()
 
 Sync::transferCasesIn =  (options) ->
   console.error "callback for transferCasesIn will be deprecated" if options?
