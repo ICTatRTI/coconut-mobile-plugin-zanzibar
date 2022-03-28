@@ -165,7 +165,7 @@ Sync::convertNotificationsToFacility = (acceptedNotificationIds, notificationsDB
           AsaqDoseAndStrength: notification["asaq-dose-and-strength"] or ""
           AluDoseAndStrength: notification["alu-dose-and-strength"] or ""
           InjectionArtesunateDoseAndStrength: notification["injection-artesunate-dose-and-strength"] or ""
-          InjectionArtemetherDoseAndStrength: notificaiton["injection-artemether-dose-and-strength"] or ""
+          InjectionArtemetherDoseAndStrength: notification["injection-artemether-dose-and-strength"] or ""
           DuoCotexinDoseAndStrength: notification["duo-cotexin-dose-and-strength"]
           ClindamycinBaseDoseAndStrength: notification["clindamycin-base-dose-and-strength"] or ""
           QuinineSulfateDoseAndStrength:  notification["quinine-sulfate-dose-and-strength"] or ""
