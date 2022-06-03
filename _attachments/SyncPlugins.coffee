@@ -62,7 +62,7 @@ Sync::getNewNotifications = (options) ->
         skip: 1
       .catch (error) => @log "ERROR, could not download USSD notifications: #{JSON.stringify error}"
       .then (result) =>
-        currentUserDistricts = Coconut.currentUser.get("district") or []
+        currentUserDistricts = [].concat(Coconut.currentUser.get("district"))
         # Make sure district is valid (shouldn't be necessary)
         currentUserDistricts = for district in currentUserDistricts
           GeoHierarchy.findFirst(district, "DISTRICT")?.name or alert "Invalid district #{district} for #{JSON.stringify Coconut.currentUser}"
