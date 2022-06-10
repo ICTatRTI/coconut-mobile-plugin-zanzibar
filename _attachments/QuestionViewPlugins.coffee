@@ -24,8 +24,14 @@ global.convertDayNumbersToDatesRelativeToDiagnosisDateAndAddSelector = (labelTex
   element = $("label:contains('#{labelText}')")
   new HouseholdLocationSelectorView(element)
 
-
-
+global.markCompleteAndExit = =>
+  if confirm("This will mark the question set as complete, are you sure?")
+    _.delay => # Small delay to allow other activities, including validation which may switch complete field
+      # MARK COMPLETE AND CLOSE
+      $("[name=complete]").prop("checked", true)
+      await Coconut.questionView.save()
+      Coconut.router.navigate("#{Coconut.databaseName}/show/results/#{escape(Coconut.questionView.result.questionName())}",true)
+    ,1000
 
 QuestionView::render = ->
 
