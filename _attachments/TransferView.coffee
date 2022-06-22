@@ -39,10 +39,13 @@ class TransferView extends Backbone.View
           console.error "Could not save #{JSON.stringify updatedCaseResults}:"
           console.error error
         .then () =>
-          await Coconut.syncView.sync.sendToCloud
-            error: =>
-              console.log "Sync failed, so transfers will be delayed until next sync."
-            success: =>
+
+          Coconut.database.replicate.to Coconut.cloudDB,
+            doc_ids: _(@caseResults).pluck "_id"
+          .on 'error', (info) =>
+            alert "Sync failed, so transfers will be delayed until next sync."
+            return
+          .on 'complete', (info) =>
               # Delete local version of results See testRemoveAndReplicateBack.coffee
               # This allows cases to be transferred back (when they will be a new document with same doc id but different rev history)
               # Since we have deleted this doc any new revision of the doc will be allowed
@@ -51,6 +54,8 @@ class TransferView extends Backbone.View
                 await Coconut.database.remove(await Coconut.database.get caseResult._id)
               alert "Case #{@caseID} has been successfully transferred to #{user}"
               Coconut.router.navigate "##{Coconut.databaseName}", trigger: true
+        .catch (error) ->
+          alert error
 
   render: =>
     @$el.html "
