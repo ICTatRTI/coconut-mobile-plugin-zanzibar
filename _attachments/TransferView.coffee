@@ -41,6 +41,7 @@ class TransferView extends Backbone.View
             doc_ids: _(@caseResults).pluck "_id"
           .on 'error', (info) =>
             alert "Sync failed, so transfers will be delayed until next sync."
+            return
           .on 'complete', (info) =>
               # Delete local version of results See testRemoveAndReplicateBack.coffee
               # This allows cases to be transferred back (when they will be a new document with same doc id but different rev history)
@@ -51,7 +52,6 @@ class TransferView extends Backbone.View
               alert "Case #{@caseID} has been successfully transferred to #{user}"
               Coconut.router.navigate "##{Coconut.databaseName}", trigger: true
         .catch (error) ->
-          alert "Could not save #{JSON.stringify updatedCaseResults}:"
           alert error
 
   render: =>
