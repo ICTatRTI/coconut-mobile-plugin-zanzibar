@@ -1,1 +1,1 @@
-/Users/esurface/projects/coconut/coconut-cloud/_attachments/app/models/Case.coffee
+/var/www/coconut-cloud-zanzibar/_attachments/app/models/Case.coffee
