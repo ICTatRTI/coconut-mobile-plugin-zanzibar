@@ -33,6 +33,35 @@ global.markCompleteAndExit = =>
       Coconut.router.navigate("#{Coconut.databaseName}/show/results/#{escape(Coconut.questionView.result.questionName())}",true)
     ,1000
 
+global.createSyncActionUnlessExists = (options) =>
+  id = Coconut.questionView.result.data._id.replace(/result-/,"syncAction_#{options.type}-")
+  existingSyncAction = await Coconut.database.get(id).catch (error) => Promise.resolve null
+  unless existingSyncAction?
+    Coconut.database.put
+      _id: id
+      action: options.action
+      description: options.description
+
+global.sendSMS = (target,message) =>
+  fetch "https://lapq907iz0.execute-api.us-east-1.amazonaws.com/default/corsProxy?url=https://paypoint.selcommobile.com/bulksms/dispatch.php?msisdn=#{target}&user=zmcp&password=i2e890&message=#{message}"
+
+global.createNotifyEntomologySyncAction = (district, message) =>
+  createSyncActionUnlessExists
+    type: "notify-entomology"
+    action: "notifyEntomology('#{district}','#{message}')"
+    description: "Create notification for Entomology"
+
+global.notifyEntomology = (district, message) =>
+  entoDb = new PouchDB(Coconut.config.cloud_url_with_credentials_no_db()+"/entomology_surveillance")
+  targetNumbers = await entoDb.allDocs
+    startkey: "user"
+    endkey: "user\uf000"
+    include_docs: true
+  .then (result) =>
+    for row in result.rows
+      if row.doc.districts?.includes district
+        await sendSMS(row.doc.mobile,message)
+
 QuestionView::render = ->
 
   @primary1 = "rgb(63,81,181)"

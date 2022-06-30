@@ -35,9 +35,6 @@ class TransferView extends Backbone.View
           caseResult
 
         Coconut.database.bulkDocs updatedCaseResults
-        .catch (error) ->
-          console.error "Could not save #{JSON.stringify updatedCaseResults}:"
-          console.error error
         .then () =>
 
           Coconut.database.replicate.to Coconut.cloudDB,
