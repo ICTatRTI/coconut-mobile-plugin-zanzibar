@@ -47,8 +47,7 @@ Sync::getNewNotifications = (options) ->
     notificationsForUsersDistricts = await Coconut.notificationsDB.query "unacceptedNotificationsByDateAndDistrict",
       include_docs: true
     .then (result) =>
-      currentUserDistricts = [Coconut.currentUser.district()].filter (district) => 
-        GeoHierarchy.validDistrict(district)
+      currentUserDistricts = [].concat(Coconut.currentUser.get("district"))
 
       Promise.resolve(
         result.rows.reduce (relevantNotifications, row) => 
