@@ -1,4 +1,7 @@
 # coconut-mobile-plugin-zanzibar
+
+*** This repo was archived on 12-03-2025 ***
+
 Plugins added to Coconut Mobile for project specific features
 
 Coconut Mobile provides the core features for a Coconut based project. Additional features required by a project are added by a plugin. Find the README file in the _attachments directory for deployment instructions.
